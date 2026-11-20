@@ -1,0 +1,37 @@
+import { ContextUsageMeter } from '@/features/chat/composer/toolbar/ContextUsageMeter';
+import { PermissionToggle } from '@/features/chat/composer/toolbar/PermissionToggle';
+import { ServiceTierToggle } from '@/features/chat/composer/toolbar/ServiceTierToggle';
+import type { ToolbarCallbacks } from '@/features/chat/composer/toolbar/types';
+import { EffortSelector } from '@/shared/toolbar/EffortSelector';
+import { ModelSelector } from '@/shared/toolbar/ModelSelector';
+import { ToolbarMenuGroup, type ToolbarMenus } from '@/shared/toolbar/ToolbarMenu';
+
+export function createInputToolbar(
+  parentEl: HTMLElement,
+  callbacks: ToolbarCallbacks,
+): {
+  modelSelector: ModelSelector;
+  effortSelector: EffortSelector;
+  contextUsageMeter: ContextUsageMeter;
+  menus: ToolbarMenus;
+  permissionToggle: PermissionToggle;
+  serviceTierToggle: ServiceTierToggle;
+} {
+  const menuGroup = new ToolbarMenuGroup();
+  const modelSelector = new ModelSelector(parentEl, callbacks, menuGroup);
+  // The read-only context gauge sits right after the model picker.
+  const contextUsageMeter = new ContextUsageMeter(parentEl);
+  const effortSelector = new EffortSelector(modelSelector, callbacks);
+  const serviceTierToggle = new ServiceTierToggle(modelSelector, callbacks);
+  // Permission is the last control; CSS pushes it to the toolbar's far end.
+  const permissionToggle = new PermissionToggle(parentEl, callbacks, menuGroup);
+
+  return {
+    modelSelector,
+    effortSelector,
+    serviceTierToggle,
+    contextUsageMeter,
+    menus: menuGroup,
+    permissionToggle,
+  };
+}

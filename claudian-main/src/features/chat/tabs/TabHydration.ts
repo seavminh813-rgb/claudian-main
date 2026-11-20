@@ -1,0 +1,129 @@
+import { StartupProfiler } from '@/core/performance/StartupProfiler';
+import type { ProviderId } from '@/core/providers/types';
+import type { AssembledTabRuntime } from '@/features/chat/tabs/types';
+import { scheduleAnimationFrame } from '@/features/chat/utils/animationFrame';
+import { t } from '@/i18n/i18n';
+
+/** `aborted`: the tab stopped being live; `failed`: the error state is rendered with a retry. */
+export type TabHydrationOutcome = 'aborted' | 'ready' | 'failed';
+
+export interface TabHydrationDeps {
+  isTabAlive(tab: AssembledTabRuntime): boolean;
+  ensureWorkspaceServices(
+    tab: AssembledTabRuntime,
+    providerId: ProviderId | null,
+    reason: string,
+  ): Promise<boolean>;
+  /** Resets the tab's hydration when its native history changed outside Claudian; null when nothing to check. */
+  revalidateSession(tab: AssembledTabRuntime): Promise<void> | null;
+  /** Invoked by the rendered retry control; the caller owns re-activation. */
+  readonly onRetry: (tab: AssembledTabRuntime) => void;
+}
+
+/**
+ * Loads an activated tab's conversation into its UI. Hydration has its own lifetime: it
+ * never creates provider execution, and a tab that stops being live aborts it silently.
+ */
+export class TabHydration {
+  #profiledFirstHydration = false;
+
+  constructor(private readonly deps: TabHydrationDeps) {}
+
+  /**
+   * Shows a loading state after paint, prepares provider workspace services, then hydrates.
+   * Failures before hydration starts propagate so the caller can roll back activation.
+   */
+  async hydrateActivatedTab(tab: AssembledTabRuntime): Promise<TabHydrationOutcome> {
+    const { deps } = this;
+    const providerId = tab.providerId;
+    // A tab kept open while hidden returns with the history it last showed.
+    const revalidation = deps.revalidateSession(tab);
+    if (revalidation) {
+      await revalidation;
+      if (!deps.isTabAlive(tab)) return 'aborted';
+    }
+    const needsHydration = !!tab.conversationId && tab.hydrationState !== 'ready';
+    if (needsHydration) {
+      renderTabHydrationState(tab, undefined, deps.onRetry);
+      await waitForTabPaint(tab);
+      if (!deps.isTabAlive(tab)) return 'aborted';
+    }
+
+    try {
+      if (!await deps.ensureWorkspaceServices(tab, providerId, 'tab-activation')) {
+        return 'aborted';
+      }
+
+      if (needsHydration && tab.conversationId) {
+        const span = this.#profiledFirstHydration ? null : StartupProfiler.start('active-hydration');
+        this.#profiledFirstHydration = true;
+        try {
+          // A refusal leaves nothing to hydrate here: a newer switch owns the transcript, or the
+          // conversation is gone and the tab shows it empty, as before the boolean contract.
+          await tab.session.runtime.model.hydrate();
+        } finally {
+          if (span) {
+            StartupProfiler.finish(span);
+          }
+        }
+        if (!deps.isTabAlive(tab)) return 'aborted';
+      } else if (!tab.conversationId && tab.state.messages.length === 0) {
+        // New tab with no conversation - initialize welcome greeting
+        tab.controllers.conversationController.initializeWelcome();
+      }
+      // A retry after a failed provider startup leaves a loaded transcript showing again.
+      clearTabHydrationStatus(tab);
+    } catch (error) {
+      if (!deps.isTabAlive(tab)) return 'aborted';
+      // The session model owns hydration; a failed provider startup leaves a loaded transcript loaded.
+      renderTabHydrationState(tab, error, deps.onRetry);
+      return 'failed';
+    }
+
+    return deps.isTabAlive(tab) ? 'ready' : 'aborted';
+  }
+}
+
+function clearTabHydrationStatus(tab: AssembledTabRuntime): void {
+  for (const statusEl of Array.from(tab.dom.messagesEl.children)) {
+    if (statusEl.hasClass('claudian-tab-hydration')) statusEl.remove();
+  }
+}
+
+function waitForTabPaint(tab: AssembledTabRuntime): Promise<void> {
+  return new Promise(resolve => {
+    scheduleAnimationFrame(resolve, tab.dom.contentEl.ownerDocument?.defaultView ?? null);
+  });
+}
+
+function renderTabHydrationState(
+  tab: AssembledTabRuntime,
+  error: unknown,
+  onRetry: (tab: AssembledTabRuntime) => void,
+): void {
+  const messagesEl = tab.dom.messagesEl;
+  // A loaded transcript stays in place under a startup error; only an unloaded one is replaced.
+  if (tab.hydrationState === 'ready') clearTabHydrationStatus(tab);
+  else messagesEl.empty();
+
+  const statusEl = messagesEl.createDiv({ cls: 'claudian-tab-hydration' });
+  if (!error) {
+    statusEl.createDiv({
+      cls: 'claudian-tab-hydration-loading',
+      text: t('chat.sessions.loading'),
+    });
+    return;
+  }
+
+  statusEl.createDiv({
+    cls: 'claudian-tab-hydration-error',
+    text: error instanceof Error ? error.message : t('chat.sessions.loadFailed'),
+  });
+  const retryButton = statusEl.createEl('button', {
+    cls: 'mod-cta claudian-tab-hydration-retry',
+    text: t('common.retry'),
+  });
+  retryButton.addEventListener('click', () => {
+    onRetry(tab);
+  });
+}

@@ -1,0 +1,160 @@
+import '@/providers';
+
+import type { Mocked } from 'vitest';
+
+import { ConversationRepository } from '@/app/conversations/ConversationRepository';
+import type { ConversationPersistence } from '@/app/storage/ConversationPersistenceStore';
+import { ProviderRegistry } from '@/core/providers/ProviderRegistry';
+import { ProviderSettingsCoordinator } from '@/core/providers/ProviderSettingsCoordinator';
+import type { Conversation } from '@/core/types';
+import { ClaudeConversationHistoryService } from '@/providers/claude/history/ClaudeConversationHistoryService';
+import * as claudeHistory from '@/providers/claude/history/ClaudeHistoryStore';
+import { OpencodeConversationHistoryService } from '@/providers/opencode/history/OpencodeConversationHistoryService';
+import type { OpencodeServerService } from '@/providers/opencode/http/OpencodeServerService';
+
+
+
+function createConversation(id = 'conversation-1'): Conversation {
+  return {
+    id,
+    providerId: 'claude',
+    title: 'Conversation',
+    createdAt: 1,
+    lastActivityAt: 1,
+    sessionId: 'session-1',
+    messages: [],
+  };
+}
+
+function createRepository(conversation = createConversation()) {
+  const persistence: Mocked<ConversationPersistence> = {
+    metadataReader: {
+      revalidate: vi.fn().mockResolvedValue([]),
+      load: vi.fn().mockResolvedValue(null),
+      scan: vi.fn().mockResolvedValue({
+        records: [],
+        complete: true,
+        invalidMetadataCount: 0,
+      }),
+      loadMetadata: vi.fn().mockResolvedValue(null),
+      scanMetadata: vi.fn().mockResolvedValue({
+        metadata: [],
+        complete: true,
+        invalidMetadataCount: 0,
+      }),
+      listMetadata: vi.fn().mockResolvedValue([]),
+    },
+    saveMetadata: vi.fn().mockResolvedValue(undefined),
+    deleteCurrentMetadata: vi.fn().mockResolvedValue(undefined),
+    assignMetadataToDevice: vi.fn().mockResolvedValue(undefined),
+  };
+  const repository = new ConversationRepository({
+    providers: ProviderRegistry,
+    providerSettings: ProviderSettingsCoordinator,
+    getSettings: () => ({}),
+    getVaultPath: () => '/vault',
+    persistence,
+    onConversationDeleted: vi.fn().mockResolvedValue(undefined),
+  });
+  repository.replaceAll([conversation]);
+  return { repository, persistence };
+}
+
+afterEach(() => vi.restoreAllMocks());
+
+/** Serves native OpenCode history through the server lease port without launching a process. */
+function createOpencodeHistoryService(readMessages: (route: string) => Promise<unknown[]>): OpencodeConversationHistoryService {
+  const server = {
+    acquire: async () => ({
+      request: async (route: string) => ({ data: await readMessages(route) }),
+      dispose: async () => {},
+    }),
+  } as unknown as OpencodeServerService;
+  return new OpencodeConversationHistoryService({ getServerService: async () => server });
+}
+
+function nativeAssistant(id: string, text: string, created: number) {
+  return { id, type: 'assistant', time: { created }, content: [{ type: 'text', text }] };
+}
+
+test('a superseded native history read cannot overwrite the current conversation', async () => {
+  let started!: () => void;
+  let release!: () => void;
+  const reading = new Promise<void>(resolve => { started = resolve; });
+  const deferred = new Promise<void>(resolve => { release = resolve; });
+  const newMessages: Conversation['messages'] = [
+    { id: 'new-message', role: 'assistant', content: 'Current session response', timestamp: 2 },
+  ];
+  vi.spyOn(ProviderRegistry, 'getConversationHistoryService')
+    .mockReturnValue(createOpencodeHistoryService(async () => {
+      started();
+      await deferred;
+      return [nativeAssistant('old-message', 'Old session response', 1)];
+    }));
+  const conversation = createConversation();
+  conversation.providerId = 'opencode';
+  conversation.selectedModel = 'opencode/example';
+  const { repository } = createRepository(conversation);
+  const pending = repository.ensureHydrated(conversation.id);
+  await reading;
+  await repository.update(conversation.id, { sessionId: 'session-2', messages: newMessages });
+  release();
+  expect(await pending).toBeNull();
+  expect(repository.getCachedConversation(conversation.id)?.sessionId).toBe('session-2');
+  expect(repository.getCachedConversation(conversation.id)?.messages).toEqual(newMessages);
+});
+
+test('does not publish a relocated identity after concurrent deletion', async () => {
+  const conversation = createConversation();
+  const { repository, persistence } = createRepository(conversation);
+  // Deletion waits for the in-flight hydration, so the read starts it without awaiting it.
+  let deleting: Promise<void> | undefined;
+  vi.spyOn(ProviderRegistry, 'getConversationHistoryService').mockReturnValue({
+    hydrateConversationHistory: async () => ({}),
+    readNativeHistoryRevision: async () => null,
+    resolveSessionIdForConversation: value => value?.sessionId ?? null,
+    isPendingForkConversation: () => false,
+    buildForkProviderState: () => ({}),
+    getConversationSessionAvailability: async () => 'relocated',
+    prepareRelocatedConversationSession: async () => {
+      deleting = repository.delete(conversation.id);
+      return { sessionId: null, providerState: { previousProviderSessionIds: ['session-1'] } };
+    },
+  });
+  expect(await repository.ensureHydrated(conversation.id)).toBeNull();
+  await deleting;
+  expect(deleting).toBeDefined();
+  expect(repository.getCachedConversation(conversation.id)).toBeNull();
+  expect(persistence.saveMetadata).not.toHaveBeenCalled();
+  expect(persistence.deleteCurrentMetadata).toHaveBeenCalledWith(conversation.id);
+});
+
+test('keeps relocated Claude history readable after its metadata save fails', async () => {
+  const conversation = createConversation();
+  conversation.selectedModel = 'sonnet';
+  const messages: Conversation['messages'] = [
+    { id: 'native-response', role: 'assistant', content: 'Native history', timestamp: 2 },
+  ];
+  const location = { availability: 'relocated' as const, sessionPath: '/old-vault/session-1.jsonl' };
+  vi.spyOn(claudeHistory, 'locateSDKSession').mockResolvedValue(location);
+  vi.spyOn(claudeHistory, 'locateSDKSessions').mockResolvedValue(new Map([['session-1', location]]));
+  vi.spyOn(claudeHistory, 'loadSDKSessionMessages').mockResolvedValue({ messages, skippedLines: 0 });
+  vi.spyOn(ProviderRegistry, 'getConversationHistoryService')
+    .mockReturnValue(new ClaudeConversationHistoryService());
+  const { repository, persistence } = createRepository(conversation);
+  persistence.saveMetadata.mockRejectedValue(new Error('Metadata unavailable'));
+
+  expect((await repository.ensureHydrated(conversation.id))?.messages).toEqual(messages);
+  expect(repository.getCachedConversation(conversation.id)?.sessionId).toBe('session-1');
+});
+
+test('OpenCode hydrates a fresh projection after another projection was discarded', async () => {
+  const service = createOpencodeHistoryService(async () => [nativeAssistant('native-response', 'Native history', 2)]);
+  const first = { ...createConversation(), providerId: 'opencode' };
+  Object.assign(first, await service.hydrateConversationHistory(first, '/vault'));
+  const fresh = { ...createConversation(), providerId: 'opencode', messages: [
+    { id: 'local-input', role: 'user' as const, content: 'Local draft', timestamp: 1 },
+  ] };
+  Object.assign(fresh, await service.hydrateConversationHistory(fresh, '/vault'));
+  expect(fresh.messages.map(message => [message.id, message.content])).toEqual([['native-response', 'Native history']]);
+});

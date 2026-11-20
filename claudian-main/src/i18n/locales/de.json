@@ -1,0 +1,1191 @@
+{
+  "common": {
+    "inputSuggestions": "Eingabevorschläge",
+    "save": "Speichern",
+    "cancel": "Abbrechen",
+    "delete": "Löschen",
+    "edit": "Bearbeiten",
+    "add": "Hinzufügen",
+    "clearAll": "Alle löschen",
+    "error": "Fehler",
+    "confirm": "Bestätigen",
+    "refresh": "Aktualisieren",
+    "retry": "Erneut versuchen",
+    "none": "Keine"
+  },
+  "chat": {
+    "queue": {
+      "queued": "In der Warteschlange",
+      "steering": "Wird eingesteuert",
+      "steerNow": "Jetzt einsteuern",
+      "edit": "Nachricht in der Warteschlange bearbeiten",
+      "discard": "Nachricht in der Warteschlange verwerfen",
+      "images": "[Bilder]"
+    },
+    "promptSuggestionHint": "Mit Tab übernehmen",
+    "selectAvailableModel": "Wähle vor dem Senden ein verfügbares Modell aus.",
+    "reloadingHistory": "Dieser Chat wurde außerhalb von Claudian geändert und wird neu geladen. Sende erneut, sobald das abgeschlossen ist.",
+    "changedOutsideWithBackgroundTask": "Dieser Chat wurde außerhalb von Claudian fortgesetzt, während eine Hintergrundaufgabe aus seiner früheren Sitzung noch läuft. Stoppe die Aufgabe oder warte, bis sie abgeschlossen ist, und sende dann erneut.",
+    "selectAvailableTitleModel": "Wähle in den Claudian-Einstellungen ein verfügbares Titelmodell aus.",
+    "rewind": {
+      "confirmMessage": "Zu diesem Punkt zurückspulen? Dateiänderungen nach dieser Nachricht können überschrieben oder entfernt werden. Dies kann nicht rückgängig gemacht werden.",
+      "confirmMessageConflicts": "Zu diesem Punkt zurückspulen? {count} außerhalb des Agenten geänderte Datei(en) werden überschrieben:\n{files}",
+      "confirmMessageConversationOnly": "Konversation zu diesem Punkt zurückspulen? Dateiänderungen bleiben erhalten.",
+      "confirmButton": "Zurückspulen",
+      "inProgress": "Bitte warten Sie, bis das aktuelle Zurückspulen abgeschlossen ist.",
+      "ariaLabel": "Hierher zurückspulen",
+      "menuConversationOnly": "Nur Konversation zurückspulen",
+      "menuCodeAndConversation": "Code + Konversation zurückspulen",
+      "notice": "Zurückgespult: {count} Datei(en) wiederhergestellt",
+      "noticeConversationOnly": "Konversation zurückgespult; Dateiänderungen bleiben erhalten",
+      "noticeSaveFailed": "Zurückgespult: {count} Datei(en) wiederhergestellt, aber Status konnte nicht gespeichert werden: {error}",
+      "noticeConversationOnlySaveFailed": "Konversation zurückgespult, aber Status konnte nicht gespeichert werden: {error}",
+      "failed": "Zurückspulen fehlgeschlagen: {error}",
+      "cannot": "Zurückspulen nicht möglich: {error}",
+      "unavailableStreaming": "Zurückspulen während des Streamings nicht möglich",
+      "unavailableNoUuid": "Zurückspulen nicht möglich: Nachrichtenkennungen fehlen"
+    },
+    "fork": {
+      "ariaLabel": "Konversation verzweigen",
+      "chooseTarget": "Konversation verzweigen",
+      "targetNewTab": "Neuer Tab",
+      "targetCurrentTab": "Aktueller Tab",
+      "notice": "In neuem Tab verzweigt",
+      "noticeCurrentTab": "Im aktuellen Tab verzweigt",
+      "failed": "Verzweigung fehlgeschlagen: {error}",
+      "unavailableStreaming": "Verzweigung während des Streamings nicht möglich",
+      "unavailableNoUuid": "Verzweigung nicht möglich: Nachrichtenkennungen fehlen",
+      "errorMessageNotFound": "Nachricht nicht gefunden",
+      "errorNoSession": "Keine Sitzungs-ID verfügbar",
+      "errorNoActiveTab": "Kein aktiver Tab"
+    },
+    "quote": {
+      "buttonLabel": "Zitieren"
+    },
+    "codeBlock": {
+      "copyAriaLabel": "{language}-Code kopieren",
+      "copied": "Kopiert!"
+    },
+    "mermaid": {
+      "diagramAlt": "Mermaid-Diagramm",
+      "showSource": "Diagrammquelltext anzeigen"
+    },
+    "sideChat": {
+      "title": "Nebenchat",
+      "collapse": "Einklappen",
+      "fullHeight": "Volle Höhe",
+      "discard": "Verwerfen",
+      "statusPreparing": "Wird vorbereitet",
+      "statusQueued": "{count} in Warteschlange",
+      "statusWorking": "Arbeitet",
+      "statusError": "Benötigt Aufmerksamkeit",
+      "statusActionRequired": "Eingabe erforderlich",
+      "placeholder": "Im Nebenchat nachfragen",
+      "composerLabel": "Nachricht im Nebenchat",
+      "needsPrompt": "Gib nach /side eine Eingabe an, um einen Nebenchat zu starten.",
+      "unsupportedProvider": "Dieser Anbieter unterstützt keinen Nebenchat.",
+      "unavailableBusy": "Der Nebenchat benötigt eine abgeschlossene Antwort. Warte, bis der aktuelle Zug endet.",
+      "unavailableNoCheckpoint": "Schließe zuerst eine Antwort in dieser Konversation ab.",
+      "unavailableNoSession": "Die Anbietersitzung dieser Konversation konnte nicht aufgelöst werden.",
+      "alreadyExists": "Für diese Konversation existiert bereits ein Nebenchat. Verwirf ihn, um einen neuen zu starten.",
+      "nestedUnavailable": "Ein Nebenchat kann keinen weiteren Nebenchat starten. Klappe zuerst zum Hauptchat ein.",
+      "mainOnlyCommand": "/{command} ist nur im Hauptchat verfügbar.",
+      "startFailed": "Nebenchat konnte nicht gestartet werden: {error}",
+      "queued": "Für den Nebenchat eingereiht.",
+      "busySide": "Der Nebenchat antwortet noch. Warte, bis er fertig ist."
+    },
+    "zen": {
+      "regionLabel": "Claudian-Chat",
+      "showHistory": "Unterhaltung anzeigen",
+      "move": "Chat-Bereich verschieben",
+      "working": "Arbeitet…",
+      "thinking": "Denkt nach…",
+      "interrupted": "Unterbrochen",
+      "workedFor": "Gearbeitet für {duration}",
+      "workedForResult": "Gearbeitet für {duration} · {result}",
+      "actionRequired": "Deine Eingabe wird benötigt",
+      "error": "Fehler: {message}",
+      "toolRunning": "{tool} · läuft",
+      "toolCompleted": "{tool} · fertig",
+      "toolFailed": "{tool} · fehlgeschlagen",
+      "toolBlocked": "{tool} · blockiert"
+    },
+    "composer": {
+      "placeholder": "Änderungen anfragen, Dateien mit @ erwähnen, /Befehle ausführen",
+      "message": "Nachricht",
+      "dropImage": "Bild hier ablegen",
+      "moreContext": "{count} weitere Kontextelemente anzeigen",
+      "showLess": "Weniger anzeigen",
+      "moreItems": "+{count} weitere"
+    },
+    "welcome": {
+      "sunday": "Schönen Sonntag",
+      "sundayNamed": "Schönen Sonntag, {name}",
+      "monday": "Schönen Montag",
+      "mondayNamed": "Schönen Montag, {name}",
+      "tuesday": "Schönen Dienstag",
+      "tuesdayNamed": "Schönen Dienstag, {name}",
+      "wednesday": "Schönen Mittwoch",
+      "wednesdayNamed": "Schönen Mittwoch, {name}",
+      "thursday": "Schönen Donnerstag",
+      "thursdayNamed": "Schönen Donnerstag, {name}",
+      "friday": "Schönen Freitag",
+      "fridayNamed": "Schönen Freitag, {name}",
+      "saturday": "Schönen Samstag!",
+      "saturdayNamed": "Schönen Samstag, {name}",
+      "backAtIt": "Weiter geht’s!",
+      "backAtItNamed": "Weiter geht’s, {name}",
+      "fridayFeeling": "Dieses Freitagsgefühl",
+      "fridayFeelingNamed": "Dieses Freitagsgefühl, {name}",
+      "weekend": "Willkommen im Wochenende",
+      "weekendNamed": "Willkommen im Wochenende, {name}",
+      "sundaySession": "Eine Sonntagsrunde?",
+      "morning": "Guten Morgen",
+      "morningNamed": "Guten Morgen, {name}",
+      "coffee": "Zeit für Kaffee und {brand}?",
+      "afternoon": "Guten Tag",
+      "afternoonNamed": "Guten Tag, {name}",
+      "hey": "Hallo",
+      "heyNamed": "Hallo, {name}",
+      "howGoing": "Wie läuft’s?",
+      "howGoingNamed": "Wie läuft’s, {name}?",
+      "evening": "Guten Abend",
+      "eveningNamed": "Guten Abend, {name}",
+      "eveningShort": "N’Abend",
+      "eveningShortNamed": "N’Abend, {name}",
+      "howDay": "Wie war dein Tag?",
+      "howDayNamed": "Wie war dein Tag, {name}?",
+      "nightOwl": "Hallo, Nachteule",
+      "hiHow": "Hi, wie geht’s dir?",
+      "hiHowNamed": "Hi {name}, wie geht’s dir?",
+      "welcomeBack": "Willkommen zurück!",
+      "welcomeBackNamed": "Willkommen zurück, {name}!",
+      "whatsNew": "Was gibt’s Neues?",
+      "whatsNewNamed": "Was gibt’s Neues, {name}?",
+      "returnsNamed": "{name} ist wieder da!",
+      "right": "Du hast völlig recht!"
+    },
+    "worked": "Gearbeitet",
+    "taskNotification": "Aufgabenbenachrichtigung",
+    "stopHook": "Stop-Hook",
+    "copyMessage": "Nachricht kopieren",
+    "showEarlierMessages": "Frühere Nachrichten anzeigen",
+    "renderFailed": "Nachrichteninhalt konnte nicht angezeigt werden.",
+    "interruptedHint": "· Was soll Claudian stattdessen tun?",
+    "sessions": {
+      "empty": "Keine Unterhaltungen",
+      "noMatch": "Keine passenden Sitzungen",
+      "resume": "Unterhaltung fortsetzen",
+      "loading": "Unterhaltung wird geladen…",
+      "current": "Aktuelle Sitzung",
+      "loadFailed": "Unterhaltung konnte nicht geladen werden",
+      "search": "Sitzungen durchsuchen",
+      "searchArchived": "Archivierte Sitzungen durchsuchen",
+      "clearSearch": "Suche löschen",
+      "showArchive": "Archivierte Sitzungen anzeigen",
+      "showSessions": "Aktive Sitzungen anzeigen"
+    },
+    "linkedContent": {
+      "label": "Verknüpfter Inhalt:",
+      "choices": "Auswahl verknüpfter Inhalte",
+      "noMatch": "Keine passenden Dateien oder Ordner",
+      "missing": "Inhalt fehlt",
+      "path": "Verknüpfter Inhalt: {path}",
+      "missingPath": "Verknüpfter Inhalt: {path}. Inhalt fehlt",
+      "noContent": "Kein verknüpfter Inhalt",
+      "missingNotice": "Verknüpfter Inhalt fehlt: {path}",
+      "openFailed": "Verknüpfter Inhalt konnte nicht geöffnet werden: {error}"
+    },
+    "selectedContext": {
+      "line": "{count} Zeile ausgewählt",
+      "lines": "{count} Zeilen ausgewählt",
+      "node": "{count} Knoten ausgewählt",
+      "nodes": "{count} Knoten ausgewählt"
+    },
+    "questions": {
+      "title": "Frage",
+      "submit": "Absenden",
+      "review": "Antworten überprüfen",
+      "ready": "Bereit, die Antworten abzusenden?",
+      "sending": "Wird gesendet…",
+      "submitAnswers": "Antworten absenden",
+      "notAnswered": "Nicht beantwortet",
+      "customAnswer": "Eigene Antwort eingeben…",
+      "secret": "Geheime Eingabe…",
+      "editAnswer": "Antwort auf {question} bearbeiten",
+      "waiting": "Warte auf Antwort…",
+      "noOptions": "Keine Optionen aufgezeichnet",
+      "sendFailed": "Antwort konnte nicht gesendet werden. Bitte erneut versuchen.",
+      "answerBelow": "Bitte im Fragenbereich unten antworten.",
+      "expired": "Frage abgelaufen.",
+      "notSent": "Die Antwort wurde nicht gesendet. Bitte erneut versuchen.",
+      "unsupportedReply": "Diese Frage kann diese Antwort nicht annehmen.",
+      "uncertainDelivery": "Die Zustellung der Antwort konnte nicht bestätigt werden. Sie wurde nicht erneut eingereiht, um doppeltes Senden zu vermeiden.",
+      "differentConversation": "Diese Frage gehört zu einer anderen Unterhaltung.",
+      "sideUnavailable": "Dieser Nebenchat ist nicht mehr verfügbar."
+    },
+    "tools": {
+      "calls": "Werkzeugaufrufe",
+      "output": "Ausgabe",
+      "noResult": "Kein Ergebnis",
+      "noMatches": "Keine Treffer",
+      "tasksUpdated": "Aufgaben aktualisiert",
+      "noChanges": "Keine Änderungen",
+      "moreLines": "… {count} weitere Zeilen",
+      "moreCharacters": "… {count} weitere Zeichen",
+      "running": "Wird ausgeführt…",
+      "noOutput": "Keine Ausgabe",
+      "status": {
+        "running": "Status: läuft",
+        "completed": "Status: abgeschlossen",
+        "error": "Status: Fehler",
+        "cancelled": "Status: abgebrochen",
+        "blocked": "Status: blockiert"
+      },
+      "inProgress": "Status: in Bearbeitung",
+      "writing": "Wird geschrieben…",
+      "done": "FERTIG",
+      "errorResult": "FEHLER",
+      "tasks": "Aufgaben",
+      "taskProgress": "Aufgaben {completed}/{total}",
+      "taskProgressLabel": "Aufgaben ({completed}/{total})",
+      "changes": "Änderungen: +{added} -{removed}",
+      "fileDeleted": "Datei gelöscht",
+      "noTextDiff": "Kein Textvergleich verfügbar",
+      "patch": "Patch",
+      "files": "{count} Dateien",
+      "file": "Datei",
+      "enteringPlan": "Planungsmodus wird gestartet",
+      "planComplete": "Plan abgeschlossen",
+      "messageAgent": "Agent benachrichtigen",
+      "listDestinations": "Ziele auflisten",
+      "messageSession": "Sitzung benachrichtigen",
+      "stopSession": "Sitzung stoppen",
+      "readSession": "Sitzung lesen",
+      "continueAgent": "Agent fortsetzen",
+      "listAgents": "Agents auflisten",
+      "interruptAgent": "Agent unterbrechen",
+      "allAgents": "Alle Agents",
+      "commandPlaceholder": "Befehl",
+      "filesPlaceholder": "Dateien",
+      "patternPlaceholder": "Muster",
+      "toolsPlaceholder": "Werkzeuge",
+      "agentCount": "{count} Agent",
+      "agentCountPlural": "{count} Agenten"
+    },
+    "subagentUI": {
+      "prompt": "Prompt",
+      "result": "Ergebnis",
+      "taskLabel": "Unteragentenaufgabe: {description} - {status}",
+      "backgroundTaskLabel": "Hintergrundaufgabe: {description} - {status}",
+      "statusLabel": "Status: {status}",
+      "initializing": "Initialisierung",
+      "error": "Fehler",
+      "orphaned": "Unvollständig",
+      "completed": "Abgeschlossen",
+      "runningInBackground": "Läuft im Hintergrund",
+      "running": "Läuft",
+      "orphanedResult": "Die Unterhaltung endete vor Abschluss der Aufgabe",
+      "lastTool": "Letztes Werkzeug: {name}",
+      "toolUse": "{count} Werkzeugaufruf",
+      "toolUses": "{count} Werkzeugaufrufe",
+      "tokens": "{value} Tokens",
+      "compactTokens": "{value}k Tokens",
+      "previousRuns": "Vorherige Durchläufe ({count})",
+      "runLabel": "Durchlauf {number} · {status}"
+    },
+    "citations": {
+      "memoryUsed": "Verwendete Erinnerungen",
+      "source": "{count} Quelle",
+      "sources": "{count} Quellen"
+    },
+    "web": {
+      "findInPage": "Auf Seite suchen",
+      "openPage": "Seite öffnen",
+      "urlUnavailable": "URL nicht verfügbar",
+      "clickLink": "Link {id} anklicken",
+      "pattern": "Muster: {pattern}",
+      "query": "Suchanfrage: {query}",
+      "altQuery": "Alternative Suchanfrage: {query}",
+      "search": "Web durchsuchen",
+      "moreQueries": "… {count} weitere Suchanfragen",
+      "clickInPage": "Link {id} auf {url} anklicken",
+      "open": "{url} öffnen",
+      "find": "„{pattern}“ suchen",
+      "inPage": "{action} auf {url}",
+      "operations": "{count} Webaktionen",
+      "searchTerm": "Suche"
+    },
+    "permissionMode": {
+      "label": "Berechtigungsmodus",
+      "current": "Berechtigungsmodus: {mode}",
+      "changeFailed": "Berechtigungsmodus konnte nicht geändert werden",
+      "antigravity": {
+        "auto": "Automatisch",
+        "autoDesc": "Änderungen im Arbeitsbereich und Befehle in der Sandbox genehmigen; zusätzliche Zugriffe prüfen"
+      },
+      "claude": {
+        "auto": "Automatisch",
+        "manual": "Manuell",
+        "acceptEdits": "Änderungen akzeptieren",
+        "yolo": "YOLO",
+        "autoDesc": "Claude entscheidet über Berechtigungen",
+        "manualDesc": "Vor Änderungen immer fragen",
+        "acceptEditsDesc": "Alle Dateiänderungen automatisch akzeptieren",
+        "yoloDesc": "Alle Berechtigungen ohne Nachfrage erteilen"
+      },
+      "codex": {
+        "autoReview": "Für mich genehmigen",
+        "normal": "Genehmigung anfragen",
+        "yolo": "Vollzugriff",
+        "autoReviewDesc": "Zusätzlichen Zugriff automatisch prüfen.",
+        "readOnlyDesc": "Vor Änderungen oder Internetzugriff fragen.",
+        "normalDesc": "Vor zusätzlichem Zugriff fragen.",
+        "yoloDesc": "Uneingeschränkter Datei- und Internetzugriff."
+      }
+    },
+    "thinking": {
+      "active": "Denke seit {seconds}s…",
+      "completed": "{seconds}s nachgedacht",
+      "label": "Gedanken"
+    },
+    "busyIndicator": {
+      "flavors": {
+        "thinking": "Nachdenken…",
+        "pondering": "Grübeln…",
+        "processing": "Verarbeiten…",
+        "analyzing": "Analysieren…",
+        "considering": "Überlegen…",
+        "workingOnIt": "Bin dran…",
+        "vibing": "In Stimmung kommen…",
+        "oneMoment": "Einen Moment…",
+        "onIt": "Schon dabei…",
+        "ruminating": "Ausgiebig nachdenken…",
+        "contemplating": "Sinnieren…",
+        "reflecting": "Reflektieren…",
+        "mullingItOver": "Das gründlich durchdenken…",
+        "letMeThink": "Lass mich überlegen…",
+        "hmm": "Hmm…",
+        "cogitating": "Tüfteln…",
+        "deliberating": "Abwägen…",
+        "weighingOptions": "Möglichkeiten abwägen…",
+        "gatheringThoughts": "Gedanken sammeln…",
+        "brewingIdeas": "Ideen brauen…",
+        "connectingDots": "Punkte verbinden…",
+        "assemblingThoughts": "Gedanken zusammensetzen…",
+        "spinningUpNeurons": "Neuronen hochfahren…",
+        "loadingBrilliance": "Genialität laden…",
+        "consultingTheOracle": "Das Orakel befragen…",
+        "summoningKnowledge": "Wissen heraufbeschwören…",
+        "crunchingThoughts": "Gedanken durchrechnen…",
+        "dustingOffNeurons": "Neuronen entstauben…",
+        "wranglingIdeas": "Ideen bändigen…",
+        "herdingThoughts": "Gedanken zusammentreiben…",
+        "jugglingConcepts": "Mit Konzepten jonglieren…",
+        "untanglingThis": "Den Knoten lösen…",
+        "piecingItTogether": "Die Teile zusammenfügen…",
+        "sippingCoffee": "Kaffee schlürfen…",
+        "warmingUp": "Aufwärmen…",
+        "gettingCozyWithThis": "Es mir damit gemütlich machen…",
+        "settlingIn": "Mich einrichten…",
+        "makingTea": "Tee kochen…",
+        "grabbingASnack": "Einen Snack holen…",
+        "parsing": "Syntax analysieren…",
+        "compilingThoughts": "Gedanken kompilieren…",
+        "runningInference": "Inferenz ausführen…",
+        "queryingTheVoid": "Die Leere abfragen…",
+        "defragmentingBrain": "Das Gehirn defragmentieren…",
+        "allocatingMemory": "Speicher reservieren…",
+        "optimizing": "Optimieren…",
+        "indexing": "Indizieren…",
+        "syncingNeurons": "Neuronen synchronisieren…",
+        "breathing": "Durchatmen…",
+        "findingClarity": "Klarheit finden…",
+        "channelingFocus": "Den Fokus bündeln…",
+        "centering": "Mich sammeln…",
+        "aligningChakras": "Chakren ausrichten…",
+        "meditatingOnThis": "Darüber meditieren…",
+        "askingTheStars": "Die Sterne befragen…",
+        "readingTeaLeaves": "Teeblätter lesen…",
+        "shakingTheMagic8Ball": "Die magische Acht schütteln…",
+        "consultingAncientScrolls": "Alte Schriftrollen konsultieren…",
+        "decodingTheMatrix": "Die Matrix entschlüsseln…",
+        "communingWithTheEther": "Mit dem Äther sprechen…",
+        "peeringIntoTheAbyss": "In den Abgrund spähen…",
+        "channelingTheCosmos": "Den Kosmos anzapfen…",
+        "divingIn": "Eintauchen…",
+        "rollingUpSleeves": "Die Ärmel hochkrempeln…",
+        "gettingToWork": "Mich an die Arbeit machen…",
+        "tacklingThis": "Das anpacken…",
+        "onTheCase": "Dem Fall auf der Spur…",
+        "investigating": "Nachforschen…",
+        "exploring": "Erkunden…",
+        "diggingDeeper": "Tiefer graben…",
+        "bearWithMe": "Hab kurz Geduld…",
+        "hangTight": "Bleib dran…",
+        "justASec": "Nur eine Sekunde…",
+        "workingMyMagic": "Ein bisschen zaubern…",
+        "almostThere": "Fast fertig…",
+        "giveMeAMoment": "Gib mir einen Moment…"
+      },
+      "hint": " (Esc zum Unterbrechen · {duration})"
+    },
+    "contextUsage": {
+      "label": "Kontextnutzung",
+      "details": "Kontextnutzung: {details}",
+      "nearLimit": " (Limit fast erreicht, zum Fortfahren {command} ausführen)"
+    },
+    "suggestions": {
+      "loading": "Wird geladen…",
+      "noMatches": "Keine Treffer",
+      "loadFailed": "Vorschläge konnten nicht geladen werden",
+      "retryHint": "Erneut eingeben, um es noch einmal zu versuchen",
+      "providerLoading": "Anbieterbefehle werden geladen…",
+      "providerRetry": "Anbieterbefehle erneut suchen",
+      "builtInDescriptions": {
+        "new": "Eine neue Unterhaltung beginnen",
+        "compact": "Den Unterhaltungsverlauf komprimieren",
+        "sessions": "Eine frühere Unterhaltung fortsetzen",
+        "fast": "Den Schnellmodus umschalten",
+        "side": "Eine temporäre Nebenfrage zur letzten Antwort stellen"
+      }
+    },
+    "approval": {
+      "title": "Berechtigung erforderlich",
+      "question": "Diese Aktion erlauben?",
+      "deny": "Ablehnen",
+      "allowOnce": "Einmal erlauben",
+      "alwaysAllow": "Immer erlauben",
+      "mcpRequest": "MCP-Anfrage",
+      "mcpServer": "MCP-Server: {server}",
+      "decline": "Ablehnen",
+      "allow": "Erlauben",
+      "cancelRequest": "Diese Anfrage abbrechen.",
+      "declineRequest": "Diese Anfrage ablehnen.",
+      "acceptRequest": "Diese Anfrage annehmen.",
+      "fileChange": "Dateiänderung",
+      "fileChangeReason": "Dateiänderung: {reason}",
+      "permissionRequest": "Berechtigungsanfrage",
+      "permissionReason": "Berechtigungsanfrage: {reason}",
+      "networkAccess": "{protocol}-Zugriff auf {host} erlauben",
+      "execute": "Ausführen: {command}",
+      "executeCommand": "Befehl ausführen",
+      "allowSimilar": "Ähnliche Befehle erlauben",
+      "execPolicy": "Änderung der Ausführungsrichtlinie genehmigen und speichern.",
+      "host": "Host",
+      "allowHost": "{host} für diese Sitzung erlauben",
+      "denyHost": "{host} für diese Sitzung ablehnen",
+      "allowRule": "Eine Zulassungsregel für {host} anwenden.",
+      "denyRule": "Eine Ablehnungsregel für {host} anwenden.",
+      "details": "Genehmigungsdetails für {tool}",
+      "unexpectedSelection": "Unerwartete Genehmigungsauswahl: „{value}“",
+      "runCommand": "Befehl ausführen: {pattern}",
+      "readFile": "Datei lesen: {pattern}",
+      "writeFile": "In Datei schreiben: {pattern}",
+      "editFile": "Datei bearbeiten: {pattern}",
+      "searchFiles": "Passende Dateien suchen: {pattern}",
+      "searchContent": "Passende Inhalte suchen: {pattern}",
+      "unknownPattern": "(unbekannt)",
+      "deepseekRequest": "DeepSeek fordert eine Berechtigung an."
+    },
+    "disclosure": {
+      "expand": "{label} - zum Erweitern klicken",
+      "collapse": "{label} - zum Einklappen klicken"
+    },
+    "removeItem": "{item} entfernen",
+    "agent": "Agent: {agent}",
+    "executionNotices": {
+      "initializeFailed": "Agentenausführung konnte nicht initialisiert werden. Bitte versuche es erneut.",
+      "unavailable": "Agentenausführung ist nicht verfügbar. Bitte lade das Plugin neu.",
+      "sessionUnavailable": "Die native Sitzung dieser Unterhaltung ist mit der aktuellen CLI-Konfiguration nicht verfügbar. Starte einen neuen Chat, um fortzufahren.",
+      "unsentFallback": "Die Nachricht wurde nicht gesendet. Bitte versuche es erneut."
+    },
+    "images": {
+      "unsupportedProvider": "Dieser Anbieter unterstützt keine Bildanhänge.",
+      "tooLarge": "Bild überschreitet das Limit von {size}.",
+      "unsupportedType": "Nicht unterstütztes Bildformat.",
+      "attachFailed": "Bild konnte nicht angehängt werden.",
+      "label": "Bild",
+      "numbered": "Bild {number}",
+      "attachment": "Bildanhang: {name} · {size}",
+      "fileNotFound": "{message} (Datei nicht gefunden)",
+      "permissionDenied": "{message} (Zugriff verweigert)",
+      "preview": "Bildvorschau: {name}",
+      "closePreview": "Bildvorschau schließen"
+    },
+    "pi": {
+      "extension": "Pi-Erweiterung",
+      "notification": "Benachrichtigung der Pi-Erweiterung."
+    },
+    "sessionMessage": {
+      "undelivered": "Nachrichten von {senders} konnten nicht zugestellt werden.",
+      "fromLabel": "Von Sitzung:"
+    },
+    "lifecycleFeedback": {
+      "runningArchive": "Laufende Sitzungen können nicht archiviert werden",
+      "archiveSkippedOne": "{count} geöffnete oder laufende Sitzung übersprungen",
+      "archiveSkippedOther": "{count} geöffnete oder laufende Sitzungen übersprungen",
+      "runningDelete": "Laufende Sitzungen können nicht gelöscht werden",
+      "deleteSkippedOne": "{count} laufende Sitzung übersprungen",
+      "deleteSkippedOther": "{count} laufende Sitzungen übersprungen",
+      "deletedCloseFallback": "Die gelöschte Sitzung konnte nicht geschlossen werden",
+      "autoFailed": "Inaktive Sitzungen konnten nicht automatisch archiviert werden",
+      "autoOne": "{count} inaktive Sitzung automatisch archiviert",
+      "autoOther": "{count} inaktive Sitzungen automatisch archiviert",
+      "nativeFailure": "{provider} konnte seine Sitzungen nicht archivieren oder wiederherstellen: {reason}"
+    },
+    "sessionTools": {
+      "noSessions": "Keine Sitzungen",
+      "thisSession": "Diese Sitzung",
+      "truncated": "Weitere Sitzungen nicht angezeigt",
+      "recipient": "Empfänger",
+      "model": "Modell",
+      "reasoning": "Reasoning",
+      "message": "Nachricht",
+      "openSession": "Sitzung {sessionId} öffnen",
+      "openProviderSession": "{provider}-Sitzung {sessionId} öffnen",
+      "sessionMissing": "Diese Sitzung existiert nicht mehr.",
+      "openFailed": "Sitzung konnte nicht geöffnet werden: {message}",
+      "openUnavailable": "Sitzungen können hier nicht geöffnet werden.",
+      "providersIncluded": "Verfügbare Anbieter und Modelle einbezogen",
+      "newSession": "Neue Sitzung",
+      "session": "Sitzung",
+      "turns": "Runden",
+      "turnRange": "{from}–{to} von {total}",
+      "noTurns": "Noch keine",
+      "mode": "Zustellung",
+      "modeSteer": "In laufende Runde einsteuern",
+      "modeInterrupt": "Aktuelle Arbeit unterbrechen"
+    },
+    "modelPicker": {
+      "options": "Modelloptionen",
+      "provider": "Anbieter",
+      "modelLabel": "Modell: {label}",
+      "unavailable": "Modell nicht verfügbar",
+      "setup": "Modelle einrichten",
+      "guidance": "Wähle in den Anbietereinstellungen ein aktiviertes Modell aus. Falls die Erkennung fehlgeschlagen ist, aktualisiere die Modellliste.",
+      "model": "Modell",
+      "empty": "Keine Modelle verfügbar. Prüfe die Anbietereinstellungen und aktualisiere die Modellliste, falls die Erkennung fehlgeschlagen ist.",
+      "changeModelFailed": "Modell konnte nicht geändert werden",
+      "defaultEffort": "Standard",
+      "effortLabel": "Denkaufwand {label}",
+      "thinking": "Denken",
+      "changeEffortFailed": "Denkaufwand konnte nicht geändert werden",
+      "fastActive": "Schnellmodus aktiviert",
+      "fast": "Schnell",
+      "fastLabel": "Schnellmodus: {label}",
+      "changeTierFailed": "Servicestufe konnte nicht geändert werden"
+    },
+    "navigation": {
+      "scrollToTop": "Nach oben scrollen",
+      "previousMessage": "Vorherige Nachricht",
+      "directory": "Unterhaltungsübersicht",
+      "nextMessage": "Nächste Nachricht",
+      "scrollToBottom": "Nach unten scrollen",
+      "emptyDirectory": "Keine Benutzer-Prompts in dieser Unterhaltung"
+    },
+    "tabNavigation": {
+      "tabName": "Tab-Name",
+      "renameTab": "Tab umbenennen…",
+      "resetName": "Tab-Namen zurücksetzen",
+      "showNumber": "Nummer anzeigen",
+      "showName": "Namen anzeigen",
+      "showTitle": "Titel anzeigen",
+      "moveLeft": "Nach links verschieben",
+      "moveRight": "Nach rechts verschieben",
+      "closeTab": "Tab schließen",
+      "active": "aktiv",
+      "needsInput": "deine Eingabe ist erforderlich",
+      "working": "in Arbeit",
+      "errorReview": "mit einem Fehler beendet, zur Überprüfung bereit",
+      "finishedReview": "abgeschlossen, zur Überprüfung bereit",
+      "idle": "inaktiv",
+      "badge": "{title}, {status}",
+      "namedBadge": "{label} ({title}), {status}",
+      "newTab": "Neuer Tab",
+      "newConversation": "Neue Unterhaltung",
+      "showWideFailed": "Die Sitzung konnte nicht im breiten Layout angezeigt werden",
+      "createTabFailed": "Tab konnte nicht erstellt werden",
+      "createConversationFailed": "Unterhaltung konnte nicht erstellt werden",
+      "startConversationFailed": "Neue Unterhaltung konnte nicht gestartet werden",
+      "switchFailed": "Tab konnte nicht gewechselt werden",
+      "closeFailed": "Tab konnte nicht geschlossen werden",
+      "resize": "Breite der Gesprächsbereiche ändern",
+      "previewCloseFailed": "Vorläufige Sitzungsvorschau konnte nicht geschlossen werden",
+      "commandNew": "Neu",
+      "commandReplace": "Aktuelle Unterhaltung ersetzen",
+      "commandClose": "Aktuellen Tab schließen",
+      "commandRename": "Aktuellen Tab umbenennen"
+    },
+    "projects": {
+      "header": "Projekte",
+      "noSessions": "Keine Sitzungen",
+      "newSessionIn": "Neue Sitzung in {name}",
+      "actionsFor": "Aktionen für {name}",
+      "newProjectAction": "Neues Projekt",
+      "chipLabel": "Projekt: {name}",
+      "noProject": "Kein Projekt",
+      "menu": {
+        "edit": "Projekt bearbeiten",
+        "openMemory": "Projektgedächtnis öffnen",
+        "archive": "Projekt archivieren",
+        "restore": "Projekt wiederherstellen",
+        "pin": "Projekt anheften",
+        "unpin": "Projekt lösen",
+        "delete": "Projekt löschen",
+        "moveTo": "In Projekt verschieben…",
+        "moveSelectionTo": "{count} Sitzungen in Projekt verschieben…",
+        "removeFrom": "Aus Projekt entfernen",
+        "removeSelectionFrom": "{count} Sitzung aus Projekt entfernen",
+        "removeSelectionFromPlural": "{count} Sitzungen aus Projekt entfernen",
+        "newProject": "Neues Projekt…"
+      },
+      "deleteConfirm": "Projekt „{name}“ löschen und seine Gedächtnisdatei in den Papierkorb verschieben? Die Sitzungen bleiben erhalten, ohne Projekt.",
+      "errors": {
+        "create": "Projekt konnte nicht erstellt werden",
+        "update": "Projekt konnte nicht aktualisiert werden",
+        "delete": "Projekt konnte nicht gelöscht werden",
+        "archive": "Projekt konnte nicht archiviert werden",
+        "restore": "Projekt konnte nicht wiederhergestellt werden",
+        "pin": "Anheften des Projekts konnte nicht geändert werden",
+        "reorder": "Projekte konnten nicht neu angeordnet werden",
+        "move": "Sitzungen konnten nicht in das Projekt verschoben werden",
+        "remove": "Sitzungen konnten nicht aus dem Projekt entfernt werden",
+        "start": "Sitzung in diesem Projekt konnte nicht gestartet werden"
+      },
+      "editor": {
+        "titleNew": "Neues Projekt",
+        "titleEdit": "Projekt bearbeiten",
+        "name": "Name",
+        "nameDesc": "Wird in der Sitzungsverwaltung und in den Mitgliedssitzungen angezeigt.",
+        "namePlaceholder": "Projektname",
+        "iconButton": "Projektsymbol: {icon}",
+        "iconDefault": "Standardordner",
+        "iconPicker": "Projektsymbol auswählen",
+        "iconSearch": "Symbole suchen",
+        "iconNoMatches": "Keine passenden Symbole.",
+        "instructions": "Anweisungen",
+        "instructionsDesc": "Wird ab dem nächsten Zug zum Systemprompt jeder Mitgliedssitzung hinzugefügt.",
+        "memoryPath": "Gedächtnisdatei",
+        "memoryPathDesc": "Vault-Pfad der Gedächtnisdatei des Projekts. Eine fehlende Endung .md wird ergänzt. Eine Änderung verschiebt die Datei.",
+        "memoryPathPlaceholder": "Ordner/MEMORY.md",
+        "memoryPathInvalid": "Gib einen Dateipfad innerhalb des Vaults ein, z. B. Projects/MEMORY.md.",
+        "memoryPathTaken": "{path} wird bereits von einer Datei oder einem anderen Projekt verwendet.",
+        "openMemory": "Öffnen",
+        "nameRequired": "Gib einen Projektnamen ein."
+      },
+      "memory": {
+        "title": "Projektgedächtnis: {name}",
+        "reload": "Neu laden",
+        "overwrite": "Überschreiben",
+        "recreate": "Aus Vorlage neu erstellen",
+        "edit": "Bearbeiten",
+        "preview": "Vorschau",
+        "missing": "Die Gedächtnisdatei des Projekts fehlt.",
+        "conflict": "Die Gedächtnisdatei wurde seit dem Laden geändert. Neu laden verwirft deine Änderungen, Überschreiben behält sie.",
+        "loadFailed": "Projektgedächtnis konnte nicht geladen werden",
+        "saveFailed": "Projektgedächtnis konnte nicht gespeichert werden",
+        "saved": "Projektgedächtnis gespeichert",
+        "loading": "Wird geladen…",
+        "updated": "Aktualisiert {time}",
+        "changedOutside": "Die Gedächtnisdatei wurde außerhalb dieses Fensters aktualisiert, vermutlich von einem Agenten.",
+        "keepMine": "Meine Änderungen behalten",
+        "discardConfirm": "Ungespeicherte Änderungen am Projektgedächtnis verwerfen?",
+        "discard": "Verwerfen",
+        "emptyHint": "Agenten füllen dies im Laufe des Projekts aus."
+      }
+    }
+  },
+  "inlineEdit": {
+    "commandName": "Inline-Bearbeitung",
+    "viewUnavailable": "Inline-Bearbeitung nicht verfügbar: Auf die aktive Markdown-Ansicht konnte nicht zugegriffen werden.",
+    "inserted": "Eingefügt",
+    "applied": "Änderung übernommen",
+    "editorUnavailable": "Inline-Bearbeitung nicht verfügbar: Auf den aktiven Editor konnte nicht zugegriffen werden. Öffne die Notiz erneut.",
+    "stale": "Die Inline-Bearbeitung wurde nicht übernommen, da sich das Quelldokument oder die Auswahl geändert hat.",
+    "initialProviderFailed": "Inline-Bearbeitung nicht verfügbar: Der Anbieter {provider} konnte nicht gestartet werden.",
+    "vaultFailed": "Vault-Dateien konnten nicht geladen werden. @-Erwähnungen im Vault sind möglicherweise nicht verfügbar.",
+    "editLabel": "Bearbeitungsanweisungen",
+    "insertLabel": "Einfügeanweisungen",
+    "editPlaceholder": "Bearbeitungsanweisungen…",
+    "insertPlaceholder": "Einfügeanweisungen…",
+    "modelUnavailable": "Wähle in den Claudian-Einstellungen ein verfügbares Modell aus.",
+    "providerFailed": "Der Anbieter {provider} konnte nicht gestartet werden.",
+    "actionsLabel": "Aktionen für die Inline-Bearbeitung",
+    "lineOne": "Zeile",
+    "lineOther": "Zeilen",
+    "reject": "Ablehnen",
+    "accept": "Übernehmen",
+    "rejectLabel": "Inline-Bearbeitung ablehnen",
+    "acceptLabel": "Inline-Bearbeitung übernehmen",
+    "retryFallback": "Fehler. Versuche es erneut",
+    "replyPlaceholder": "Antworten, um fortzufahren…",
+    "noResponseFallback": "Keine Antwort vom Agenten",
+    "followUpPlaceholder": "Änderungen anfordern oder mit Enter übernehmen"
+  },
+  "settings": {
+    "tabs": {
+      "general": "Allgemein",
+      "providers": "Anbieter",
+      "skills": "Skills"
+    },
+    "providerSettings": {
+      "unavailable": "Anbietereinstellungen sind nicht verfügbar.",
+      "loadFailed": "Anbietereinstellungen konnten nicht geladen werden: {message}"
+    },
+    "display": "Anzeige",
+    "conversations": "Unterhaltungen",
+    "content": "Inhalte",
+    "input": "Eingabe",
+    "models": "Modelle",
+    "responses": "Antworten",
+    "experimental": "Experimentell",
+    "userName": {
+      "name": "Wie soll Claudian dich nennen?",
+      "desc": "Dein Name für personalisierte Begrüßungen (leer lassen für allgemeine Begrüßungen)"
+    },
+    "excludedTags": {
+      "name": "Ausgeschlossene Tags",
+      "desc": "Notizen mit diesen Tags werden nicht automatisch als Kontext geladen (einer pro Zeile, ohne #)"
+    },
+    "mediaFolder": {
+      "name": "Medienordner",
+      "desc": "Ordner mit Anhängen/Bildern. Wenn Notizen ![[image.jpg]] verwenden, sucht Claude hier. Leer lassen für Vault-Stammverzeichnis."
+    },
+    "systemPrompt": {
+      "name": "Benutzerdefinierter System-Prompt",
+      "desc": "Zusätzliche Anweisungen, die an den Standard-System-Prompt angehängt werden"
+    },
+    "showTabTitlesByDefault": {
+      "name": "Tab-Titel standardmäßig anzeigen",
+      "desc": "Neue Chat-Tabs zeigen den Konversationstitel statt einer Nummer. Geöffnete Tabs behalten ihre Anzeige, und jeder Tab kann weiterhin umgestellt werden."
+    },
+    "chatFontScale": {
+      "name": "Schriftgröße im Chat",
+      "desc": "Chat-Text relativ zur Schriftgröße der Notizen skalieren. 100 % entspricht den Notizen."
+    },
+    "autoTitle": {
+      "name": "Konversationstitel automatisch generieren",
+      "desc": "Generiert automatisch Konversationstitel nach der ersten Nutzernachricht."
+    },
+    "titleLanguage": {
+      "name": "Sprache der Titelgenerierung",
+      "desc": "Sprache für automatisch generierte Konversationstitel.",
+      "followInterface": "Wie Oberflächensprache"
+    },
+    "titleModel": {
+      "name": "Titel-Generierungsmodell",
+      "desc": "Modell zur automatischen Generierung von Konversationstiteln.",
+      "select": "Modell auswählen",
+      "unavailableWarning": "Automatische Titel sind pausiert. Wählen Sie ein verfügbares Titelmodell."
+    },
+    "navMappings": {
+      "name": "Vim-Style Navigationszuordnungen",
+      "desc": "Eine Zuordnung pro Zeile. Format: \"map <Taste> <Aktion>\" (Aktionen: scrollUp, scrollDown, focusInput)."
+    },
+    "requireCommandOrControlEnterToSend": {
+      "name": "Command/Ctrl+Enter zum Senden erfordern",
+      "desc": "Wenn aktiviert, fügt Enter einen Zeilenumbruch ein. Command+Enter sendet unter macOS; Ctrl+Enter sendet unter Windows und Linux."
+    },
+    "safety": "Sicherheit",
+    "loadUserSettings": {
+      "name": "Claude-Code-Benutzereinstellungen laden",
+      "desc": "Lädt die Claude-Code-Konfiguration auf Benutzerebene aus ~/.claude: settings.json, Skills, Befehle, Agenten und Plugins. Wenn deaktiviert, ist nur die Konfiguration auf Vault-Ebene verfügbar. Wenn aktiviert, können Benutzer-Berechtigungsregeln den Sicherheitsmodus umgehen."
+    },
+    "codexSandbox": {
+      "name": "Sandbox",
+      "desc": "Dateizugriff in den Modi „Für mich genehmigen“ und „Genehmigung anfragen“. „Nur lesen“ fragt vor jeder Änderung; „Vollzugriff“ ignoriert diese Einstellung."
+    },
+    "environment": "Umgebung",
+    "sharedEnvironment": {
+      "name": "Gemeinsame Umgebung",
+      "desc": "Anbieterunabhängige Laufzeitvariablen, die mit allen Anbietern geteilt werden. Verwenden Sie dies für PATH-, Proxy-, Zertifikats- und Temp-Variablen."
+    },
+    "customVariables": {
+      "name": "Benutzerdefinierte Variablen",
+      "desc": "Nur Laufzeitvariablen, die Claude Code gehören. Verwenden Sie dies für ANTHROPIC_* und Claude-Code-spezifische Schalter."
+    },
+    "envSnippets": {
+      "name": "Snippets",
+      "addBtn": "Snippet hinzufügen",
+      "saveCurrent": "Aktuelle Umgebung als Snippet speichern",
+      "nameRequired": "Bitte geben Sie einen Namen für das Snippet ein",
+      "insert": "Einfügen",
+      "modal": {
+        "titleEdit": "Snippet bearbeiten",
+        "titleSave": "Snippet speichern",
+        "name": "Name",
+        "namePlaceholder": "Ein beschreibender Name für diese Umgebungskonfiguration",
+        "description": "Beschreibung",
+        "descPlaceholder": "Optionale Beschreibung",
+        "envVars": "Umgebungsvariablen",
+        "envVarsPlaceholder": "KEY=VALUE-Format, eine pro Zeile (export-Präfix unterstützt)",
+        "save": "Speichern",
+        "update": "Aktualisieren",
+        "cancel": "Abbrechen"
+      },
+      "insertFailed": "Snippet konnte nicht eingefügt werden",
+      "deleteConfirm": "Umgebungs-Snippet \"{name}\" löschen?",
+      "deleteFailed": "Snippet konnte nicht gelöscht werden"
+    },
+    "customModelAliases": {
+      "ariaLabel": "Alias für {model}",
+      "ariaDescription": "Benutzerdefinierte Bezeichnung in der Modellauswahl. Leer lassen, um die Standardbezeichnung zu verwenden."
+    },
+    "enableChrome": {
+      "name": "Chrome-Erweiterung aktivieren",
+      "desc": "Erlaubt Claude Code die Interaktion mit Chrome über die claude-in-chrome-Erweiterung. Die Erweiterung muss installiert sein. Erfordert Neustart der Sitzung."
+    },
+    "enableDualPane": {
+      "name": "Zwei-Spalten-Modus aktivieren",
+      "desc": "Den Sitzungsmanager automatisch neben dem Chat anzeigen, wenn die Ansicht mindestens 600 px breit ist."
+    },
+    "restoreTabsOnStartup": {
+      "name": "Tabs beim Start wiederherstellen",
+      "desc": "Im Einzelbereichsmodus alle Tabs, im Zwei-Spalten-Modus nur den zuletzt aktiven Tab erneut öffnen."
+    },
+    "sessionAutoArchiveAfter": {
+      "name": "Inaktive Sitzungen automatisch archivieren",
+      "desc": "Nicht angeheftete Sitzungen ohne Aktivität im gewählten Zeitraum archivieren. Geöffnete und laufende Sitzungen werden übersprungen.",
+      "multiSelectHint": "Klicken Sie mit gedrückter Wahltaste (Alt unter Windows und Linux) auf Sitzungen, um mehrere auszuwählen, und klicken Sie dann mit der rechten Maustaste, um sie anzuheften oder zu archivieren.",
+      "off": "Aus",
+      "days7": "Nach 7 Tagen",
+      "days14": "Nach 14 Tagen",
+      "days30": "Nach 30 Tagen"
+    },
+    "dualPaneSide": {
+      "name": "Seite der zweiten Spalte",
+      "desc": "Auswählen, auf welcher Seite des Chats der Sitzungsmanager angezeigt wird.",
+      "left": "Links",
+      "right": "Rechts"
+    },
+    "enableAutoScroll": {
+      "name": "Automatisches Scrollen während Streaming",
+      "desc": "Automatisch nach unten scrollen, während Claude Antworten streamt. Deaktivieren, um oben zu bleiben und von Anfang an zu lesen."
+    },
+    "deferMathRenderingDuringStreaming": {
+      "name": "Mathe-Rendering während Streaming aufschieben",
+      "desc": "LaTeX während des Streamings roh anzeigen und Mathematik einmal rendern, wenn der Textblock abgeschlossen ist."
+    },
+    "pluginRenderedFenceLanguages": {
+      "name": "Von Plugins gerenderte Codeblock-Sprachen",
+      "desc": "Codeblock-Sprachen, eine pro Zeile, die an das Plugin übergeben werden, das sie in Notizen rendert (z. B. vega-lite). Sie werden gerendert, sobald die Antwort fertig ist. Andere Codeblöcke werden immer als Code angezeigt."
+    },
+    "expandFileEditsByDefault": {
+      "name": "Dateibearbeitungen standardmäßig ausklappen",
+      "desc": "Write- und Edit-Diffs beim ersten Erscheinen ausgeklappt anzeigen."
+    },
+    "chatViewPlacement": {
+      "name": "Claudian öffnen in",
+      "desc": "Wählen Sie, wo das Chat-Panel beim Erstellen geöffnet wird",
+      "rightSidebar": "Rechte Seitenleiste",
+      "leftSidebar": "Linke Seitenleiste",
+      "mainTab": "Haupteditor-Tab"
+    },
+    "enableZenMode": {
+      "name": "Zen-Modus aktivieren",
+      "desc": "Hält eine reduzierte Chat-Oberfläche sichtbar, wenn die Seitenleiste ausgeblendet ist."
+    },
+    "cliInstallation": {
+      "disclosure": "{name}-Installation",
+      "description": "Optionaler CLI-Pfad für diesen Computer. Für automatische Erkennung leer lassen.",
+      "checking": "CLI wird geprüft…",
+      "versionUnavailable": "Version nicht verfügbar",
+      "notFound": "Nicht gefunden",
+      "custom": "Benutzerdefinierter Pfad",
+      "auto": "Automatisch erkannt",
+      "checkFailed": "CLI konnte nicht geprüft werden",
+      "saveFailed": "Pfad konnte nicht gespeichert werden. Erneut versuchen."
+    },
+    "cliPath": {
+      "name": "Claude-Code-CLI-Pfad",
+      "genericName": "CLI-Pfad",
+      "validation": {
+        "notExist": "Pfad existiert nicht",
+        "isDirectory": "Pfad ist ein Verzeichnis, keine Datei",
+        "mustBeAbsolute": "Pfad muss absolut sein",
+        "notFile": "Pfad muss auf eine Datei verweisen",
+        "notAccessible": "Pfad ist nicht zugänglich",
+        "notExecutable": "Pfad muss ausführbar sein"
+      }
+    },
+    "language": {
+      "name": "Sprache",
+      "desc": "Anzeigesprache der Plugin-Oberfläche ändern"
+    },
+    "providerEnablement": {
+      "name": "{provider} aktivieren",
+      "lastProviderWarning": "Damit Claudian funktioniert, muss mindestens ein Anbieter aktiviert bleiben.",
+      "noModelsWarning": "Keine {provider}-Modelle sind aktiviert. Aktivieren Sie unten unter „Modelle“ mindestens ein Modell."
+    },
+    "modelPicker": {
+      "name": "Sichtbare Modelle",
+      "desc": "Wählen Sie, welche Modelle in der Chat-Auswahl verfügbar sind. Ziehen Sie sie, um die Reihenfolge zu ändern; der Anbieter verwendet das erste derzeit nutzbare Modell als Standard. Wählen Sie mindestens ein Modell aus, um diesen Anbieter zu verwenden.",
+      "browse": "Modelle durchsuchen",
+      "filterLabel": "{provider}-Modelle filtern",
+      "searchPlaceholder": "Nach Modell, Anbieter oder ID filtern...",
+      "providerFilterLabel": "Modellanbieter filtern",
+      "allProviders": "Alle Anbieter ({count})",
+      "discover": "Erkennen",
+      "visible": "Sichtbar: ",
+      "ofDiscovered": " von {count} erkannten",
+      "oneProvider": " | 1 Anbieter",
+      "manyProviders": " | {count} Anbieter",
+      "loadingModels": "Modelle werden geladen...",
+      "loading": "Wird geladen...",
+      "available": "{count} verfügbar",
+      "noneDiscovered": "Noch keine Modelle erkannt",
+      "selected": "Ausgewählt ({count})",
+      "clearAllLabel": "Alle ausgewählten {provider}-Modelle entfernen",
+      "reorderLabel": "{model} neu anordnen; ziehen oder die Pfeiltasten nach oben und unten verwenden",
+      "default": "Standard",
+      "unavailable": "Nicht verfügbar",
+      "aliasLabel": "Alias (optional)",
+      "removeLabel": "{model} entfernen",
+      "noMatch": "Keine Modelle entsprechen Ihrem Filter.",
+      "emptyCatalog": "Keine {provider}-Modelle gemeldet. Prüfen Sie Ihre Konfiguration und klicken Sie auf Erkennen.",
+      "loadingCatalog": "{provider}-Modelle werden geladen…",
+      "stale": "Der {provider}-Modellkatalog ist veraltet. Klicken Sie auf Erkennen, um ihn zu aktualisieren."
+    },
+    "claude": {
+      "promptSuggestions": {
+        "name": "Prompt-Vorschläge",
+        "desc": "Zeigt Claudes Vorschlag für den nächsten Prompt im leeren Eingabefeld. Jeder Vorschlag ist eine zusätzliche Claude-Anfrage nach jeder Runde und kann Ihre Nutzungslimits schneller aufbrauchen."
+      },
+      "configuration": "Konfiguration",
+      "responseStyle": {
+        "name": "Antwortstil",
+        "desc": "Claude-Code-Ausgabestil für Antworten, einschließlich eigener Stile. „Claude-Code-Einstellung“ folgt deiner Claude-Code-Konfiguration. Die Liste wird aktualisiert, wenn Modelle aktualisiert werden oder ein Chat startet.",
+        "default": "Standard",
+        "inherit": "Claude-Code-Einstellung"
+      }
+    },
+    "codex": {
+      "cliPath": {
+        "name": "Codex-CLI-Pfad"
+      },
+      "safeMode": {
+        "workspaceWrite": "Workspace schreiben",
+        "readOnly": "Nur lesen"
+      },
+      "responseStyle": {
+        "name": "Antwortstil",
+        "desc": "Wähle den Kommunikationsstil von Codex bei unterstützten Modellen.",
+        "pragmatic": "Pragmatisch",
+        "friendly": "Freundlich",
+        "neutral": "Neutral"
+      },
+      "responseVerbosity": {
+        "name": "Antwortumfang",
+        "desc": "Wählen Sie den Detailgrad der Antworten bei unterstützten Modellen. Standard verwendet Ihre Codex-Konfiguration.",
+        "default": "Standard",
+        "low": "Niedrig",
+        "medium": "Mittel",
+        "high": "Hoch"
+      },
+      "reasoningSummary": {
+        "name": "Reasoning-Zusammenfassung",
+        "desc": "Zeigt eine Zusammenfassung des Reasoning-Prozesses des Modells im Denkblock.",
+        "auto": "Automatisch",
+        "concise": "Kurz",
+        "detailed": "Ausführlich",
+        "off": "Aus"
+      },
+      "ultraEffort": {
+        "name": "Ultra-Denktiefe aktivieren",
+        "desc": "Ultra in der Auswahl für Codex-Modelle anzeigen, die es unterstützen. Ultra nutzt maximale Denktiefe mit automatischer Aufgabendelegation."
+      },
+      "environment": {
+        "name": "Codex-Umgebung",
+        "desc": "Nur Laufzeitvariablen, die Codex gehören. Verwende dies für OPENAI_*- und CODEX_*-Einstellungen. Wenn die Autoerkennung von Codex Hilfe braucht, füge das Installationsverzeichnis dem gemeinsamen PATH hinzu statt diesem Anbieterabschnitt."
+      }
+    },
+    "agentSkills": {
+      "sharedExpectation": "Gemeinsame Skills in .agents/skills/ für kompatible Anbieter verwalten.",
+      "noSkills": "Keine gemeinsamen Skills konfiguriert. Klicken Sie auf +, um einen zu erstellen.",
+      "skillBadge": "Skill",
+      "diagnosticsTitle": "Skills, die Aufmerksamkeit brauchen",
+      "loadFailed": "Gemeinsame Skills konnten nicht geladen werden.",
+      "savedRefreshFailed": "Gespeichert, aber die Aktualisierung der Anbieter ist fehlgeschlagen.",
+      "validationFailed": "Ungültiger Skill: {message}",
+      "collisionFailed": "Ein Skill namens \"{name}\" existiert bereits.",
+      "saveFailed": "Gemeinsamer Skill konnte nicht gespeichert werden: {message}",
+      "deleteFailed": "Gemeinsamer Skill konnte nicht in den Papierkorb verschoben werden: {message}",
+      "staleConflict": "Dieser Skill wurde an anderer Stelle geändert; vor dem Speichern aktualisieren.",
+      "created": "Gemeinsamer Skill \"{name}\" erstellt.",
+      "updated": "Gemeinsamer Skill \"{name}\" aktualisiert.",
+      "deleted": "Gemeinsamer Skill \"{name}\" in den Papierkorb verschoben.",
+      "fix": "Reparieren",
+      "fixed": "Skill \"{name}\" repariert.",
+      "modal": {
+        "titleEdit": "Gemeinsamen Skill bearbeiten",
+        "titleAdd": "Gemeinsamen Skill hinzufügen",
+        "titleFix": "Skill reparieren",
+        "name": "Skill-Name",
+        "nameDesc": "Kleinbuchstaben und Zahlen, getrennt durch einzelne Bindestriche",
+        "namePlaceholder": "code-reviewer",
+        "description": "Beschreibung",
+        "descriptionDesc": "Erforderliche portable Beschreibung, anhand derer Anbieter den Skill auswählen",
+        "descriptionPlaceholder": "Prüft Code auf Korrektheit und Wartbarkeit",
+        "instructions": "Anweisungen",
+        "instructionsDesc": "Erforderliche SKILL.md-Anweisungen",
+        "instructionsPlaceholder": "Prüfe den bereitgestellten Code und melde umsetzbare Befunde..."
+      },
+      "delete": {
+        "title": "Gemeinsamen Skill löschen",
+        "description": "Der gesamte Skill-Ordner, einschließlich Skripten, Referenzen und Assets, wird in den Papierkorb verschoben.",
+        "confirm": "In den Papierkorb verschieben"
+      }
+    },
+    "opencode": {
+      "emptyModels": "Der OpenCode-Server hat keine aktivierten Modelle für diesen Vault zurückgegeben. Prüfen Sie .opencode/opencode.json im Vault und die OpenCode-Protokolle (opencode debug paths zeigt deren Speicherort). Bei OpenCode v2 können konfigurierte V1-Plugins inkompatibel sein. Vergleichen Sie opencode models --standalone im Vault und klicken Sie erneut auf Entdecken.",
+      "environment": {
+        "name": "OpenCode-Umgebungsvariablen",
+        "desc": "Zusätzliche Umgebungsvariablen, die an OpenCode übergeben werden."
+      },
+      "migrationNotice": {
+        "text": "OpenCode v1 wird nicht mehr unterstützt. Aktualisieren Sie auf OpenCode v2, um es in Claudian zu verwenden.",
+        "link": "Zu OpenCode v2 migrieren"
+      }
+    },
+    "pi": {
+      "environment": {
+        "name": "Pi-Umgebungsvariablen",
+        "desc": "Umgebungsvariablen, die nur an Pi übergeben werden."
+      },
+      "models": {
+        "desc": "Claudian führt eine eigene Modellliste, getrennt von Pis enabledModels. „Discover“ listet alle Modelle, die Pi in seiner aktuellen Umgebung authentifizieren kann, gruppiert nach der Provider-Route, die Pi aufruft. Die Route bestimmt Zugangsdaten und Abrechnung."
+      }
+    },
+    "grok": {
+      "environment": {
+        "name": "Grok-Build-Umgebungsvariablen",
+        "desc": "Umgebungsvariablen, die nur an Grok Build übergeben werden. Geheimnisse für benutzerdefinierte Modelle bleiben in diesem Anbieterbereich und werden in der nativen Konfiguration über env_key referenziert."
+      }
+    },
+    "antigravity": {
+      "environment": {
+        "name": "Antigravity-Umgebungsvariablen",
+        "desc": "Umgebungsvariablen, die nur an Antigravity (agy) übergeben werden, z. B. GEMINI_API_KEY."
+      },
+      "listModelsFailed": "Die Antigravity-Modelle konnten nicht aufgelistet werden. Details zeigt agy models im Terminal. Verwende agy acp --login zur Anmeldung.",
+      "updateReminder": "Claudian unterstützt nur die neueste agy-Version, und agy ändert sich schnell. Halten Sie es aktuell:"
+    },
+    "deepseek": {
+      "installation": {
+        "desc": "Die automatische Suche bevorzugt dsh und sucht danach unter macOS oder Windows nach Desktop. Sind beide installiert, wähle Desktop durch Angabe des .app-Pfads oder des Windows-Installationsordners. Öffne Desktop zunächst, um die Einrichtung abzuschließen.",
+        "wslDesc": "WSL benötigt Linux-Node.js und npm dsh in der gewählten Distribution sowie ein eingerichtetes natives Web-Profil. DeepSeek Harness Desktop ist keine WSL-Installation. Installieren Sie @deepseek-ai/dsh in der Distribution oder wählen Sie natives Windows, um Desktop zu verwenden."
+      },
+      "preset": "Preset",
+      "codeMode": {
+        "name": "Code-Modus aktivieren",
+        "desc": "Gilt ab dem nächsten Zug jeder Unterhaltung, auch für bestehende Unterhaltungen. Das Modell ruft Werkzeuge aus nativen run_code-Programmen statt direkt auf."
+      },
+      "presetPlugins": {
+        "name": "Zusätzliche Preset-Plugins",
+        "desc": "Erweitert. Eine YAML-Liste (dsh-Format) nativer dsh-Plugin-Zeilen, die an Claudians Chat-Preset angehängt werden, jeweils mit eigener \"id\" und eigenem \"name\". Zeilen können Claudians eigene nicht ersetzen. Speichern startet DeepSeek Harness neu und beendet laufende Züge. Plugins ohne Claudian-Oberfläche, etwa der Planmodus, funktionieren möglicherweise nicht."
+      },
+      "presetPreview": "Preset-Vorschau",
+      "environment": {
+        "name": "DeepSeek-Harness-Umgebungsvariablen",
+        "desc": "Umgebungsvariablen, die nur an DeepSeek Harness übergeben werden. Verwendet das ausgewählte native Web- oder Desktop-Profil, deine Anmeldedaten, Modelle und MCP-Server."
+      }
+    },
+    "skills": {
+      "subTabs": {
+        "claude": "Claude Code",
+        "shared": "Andere Anbieter"
+      },
+      "claudeHelp": "Claude-Code-Skills in .claude/skills/ und Befehle in .claude/commands/.",
+      "sharedHelp": "Gemeinsame Skills in .agents/skills/ für Codex, OpenCode, Pi, Grok Build und DeepSeek Harness.",
+      "status": {
+        "error": "Die Skill-Ordner konnten nicht gelesen werden: {message}"
+      },
+      "synced": "Synchronisiert",
+      "actions": {
+        "sync": "Synchronisieren",
+        "resync": "Neu synchronisieren"
+      },
+      "commands": {
+        "title": "Claude-Code-Befehle",
+        "hint": "Befehle funktionieren nur in Claude Code. Es wird empfohlen, sie in Skills umzuwandeln.",
+        "badge": "Befehl",
+        "empty": "Keine Befehle in .claude/commands.",
+        "convert": "In Skill umwandeln",
+        "editTitle": "Befehl bearbeiten",
+        "convertTitle": "Befehl in Skill umwandeln",
+        "nameDesc": "Pfad unter .claude/commands ohne .md; verschachtelte Befehle verwenden /",
+        "descriptionDesc": "Optionale Beschreibung im Befehlsmenü",
+        "updated": "Befehl \"{name}\" aktualisiert.",
+        "converted": "Befehl in Skill \"{name}\" umgewandelt.",
+        "deleted": "Befehl \"{name}\" in den Papierkorb verschoben.",
+        "deleteTitle": "Befehl löschen",
+        "deleteDescription": "Die Befehlsdatei wird in den Papierkorb verschoben.",
+        "collisionFailed": "Ein Befehl namens \"{name}\" existiert bereits."
+      },
+      "droppedFrontmatterWarning": "Beim Speichern bleiben nur Name und Beschreibung erhalten. Diese Schlüssel werden entfernt und das Verhalten der Anbieter kann sich ändern: {keys}",
+      "hidden": {
+        "name": "Ausgeblendete Befehle und Skills",
+        "desc": "Blendet Befehle und Skills im Befehlsmenü aller Anbieter aus. Exakte Namen ohne führenden Schrägstrich eingeben, einen pro Zeile (Pi-Skills verwenden skill:name).",
+        "placeholder": "commit\ncompact\nskill:review"
+      },
+      "sync": {
+        "title": "Skills synchronisieren",
+        "repairTitle": "Skills-Link reparieren",
+        "loading": "Skill-Ordner werden geprüft...",
+        "intro": "Die Synchronisierung führt die Skills und Befehle von Claude Code in .agents/skills zusammen und verlinkt .claude/skills dorthin.",
+        "pros": {
+          "oneList": "Eine Liste für alle Anbieter.",
+          "newSkills": "Neue Skills erscheinen überall."
+        },
+        "cons": {
+          "dropped": "Nur Name und Beschreibung bleiben erhalten; anbieterspezifische Einstellungen entfallen und das Verhalten kann sich ändern.",
+          "claudeSyntax": "Nur für Claude Code gültige Syntax funktioniert bei anderen Anbietern nicht: {names}"
+        },
+        "attentionTitle": "Braucht Aufmerksamkeit",
+        "nothingNeedsAttention": "Nichts braucht Aufmerksamkeit.",
+        "nameField": "Name",
+        "descriptionField": "Beschreibung",
+        "ready": "Bereit",
+        "problems": {
+          "name": "Ungültiger Name. Nur Kleinbuchstaben, Zahlen und Bindestriche.",
+          "description": "Beschreibung fehlt.",
+          "instructions": "Keine Anweisungen. Ergänze sie in der Datei und synchronisiere erneut.",
+          "unreadable": "Das Frontmatter kann nicht gelesen werden. Korrigiere die Datei und synchronisiere erneut.",
+          "sharedConflict": "Ein gemeinsamer Skill namens \"{name}\" existiert bereits.",
+          "itemConflict": "Ein anderes Element heißt ebenfalls \"{name}\"."
+        },
+        "options": {
+          "fix": "Korrigieren",
+          "replace": "Gemeinsamen Skill ersetzen",
+          "discard": "Verwerfen (in den Papierkorb)",
+          "keep": "Als Befehl behalten"
+        },
+        "continue": "Weiter",
+        "confirmTitle": ".claude/skills durch einen Link ersetzen?",
+        "confirmBody": ".claude/skills wird durch einen Link auf .agents/skills ersetzt. Dies kann nicht rückgängig gemacht werden.",
+        "repairBody": ".claude/skills wird durch einen Link auf .agents/skills ersetzt. Der Ordner, auf den er jetzt verweist, bleibt unverändert.",
+        "linkBody": "Erstellt .claude/skills als Link auf .agents/skills, damit Claude Code die gemeinsamen Skills nutzt. Es werden keine Dateien verschoben.",
+        "linkWithItemsBody": "Befehle werden zu Skills, dann wird .claude/skills als Link auf .agents/skills erstellt. Dies kann nicht rückgängig gemacht werden.",
+        "devicesWarning": "Wird dieser Vault zwischen Geräten synchronisiert? Der Link wird eventuell nicht übertragen; synchronisiere auf jedem Gerät.",
+        "confirm": "Synchronisieren und verlinken",
+        "partial": "Die Synchronisierung wurde vor dem Verlinken beendet. Behebe die folgenden Elemente und synchronisiere erneut.",
+        "failed": "Synchronisierung fehlgeschlagen: {message}",
+        "summary": "Verschoben {moved}, umgewandelt {converted}, im Papierkorb {trashed}, {unlinked} Link(s) entfernt."
+      }
+    },
+    "executionTarget": {
+      "installationMethod": {
+        "name": "Installationsmethode",
+        "desc": "Wie Claudian {provider} unter Windows starten soll. Native Windows verwendet einen Windows-Programmpfad. WSL startet die Linux-CLI in einer ausgewählten Distribution.",
+        "nativeWindows": "Natives Windows",
+        "wsl": "WSL"
+      },
+      "wslDistroOverride": {
+        "name": "WSL-Distribution überschreiben",
+        "desc": "Optionale erweiterte Überschreibung. Leer lassen, um die Distribution möglichst aus einem WSL-Workspace-Pfad abzuleiten, sonst wird die Standard-WSL-Distribution verwendet."
+      },
+      "wslWindowsPath": "Der WSL-Modus erwartet einen Linux-Befehl oder absoluten Linux-Pfad, keinen Windows-Programmpfad."
+    }
+  }
+}

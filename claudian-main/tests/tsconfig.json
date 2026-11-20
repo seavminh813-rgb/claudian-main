@@ -1,0 +1,9 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "target": "ES2018",
+    "useDefineForClassFields": false,
+    "types": ["node", "vitest/globals"]
+  },
+  "include": ["**/*.ts"]
+}

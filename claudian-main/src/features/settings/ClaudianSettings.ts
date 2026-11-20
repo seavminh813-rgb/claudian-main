@@ -1,0 +1,696 @@
+import type { App, Plugin, SettingDefinitionItem } from 'obsidian';
+import { Notice, PluginSettingTab } from 'obsidian';
+
+import { ProviderRegistry } from '@/core/providers/ProviderRegistry';
+import { ProviderSettingsCoordinator } from '@/core/providers/ProviderSettingsCoordinator';
+import { ProviderWorkspaceRegistry } from '@/core/providers/ProviderWorkspaceRegistry';
+import type { ProviderId, ProviderSettingsTabRenderHandle } from '@/core/providers/types';
+import type {
+  ChatViewPlacement,
+  ClaudianSettings,
+  DualPaneSide,
+  SessionAutoArchiveAfter,
+} from '@/core/types/settings';
+import { type SkillsSettingsHost, SkillsSettingsTab } from '@/features/agent-skills/SkillsSettingsTab';
+import type { FeatureHost } from '@/features/FeatureHost';
+import { buildNavMappingText, parseNavMappings } from '@/features/settings/keyboardNavigation';
+import { getAvailableLocales, getLocaleDisplayName, setLocale, t } from '@/i18n/i18n';
+import type { Locale } from '@/i18n/types';
+import { createProviderIconSvg } from '@/shared/icons';
+import { AccessibleSetting } from '@/shared/settings/AccessibleSetting';
+import { bindCommittedControl } from '@/shared/settings/CommittedControl';
+import { DebouncedSettingsWriter } from '@/shared/settings/DebouncedSettingsWriter';
+import { renderEnvironmentSettingsSection } from '@/shared/settings/EnvironmentSettingsSection';
+import { frameSettingsGroups } from '@/shared/settings/SettingsGroups';
+
+type SettingsTabId = 'general' | 'providers' | 'skills';
+
+
+/** The shared host plus the capabilities of panels this tab renders. */
+export type SettingsFeatureHost = FeatureHost & SkillsSettingsHost;
+
+export class ClaudianSettingTab extends PluginSettingTab {
+  private readonly host: SettingsFeatureHost;
+  private activeTab: SettingsTabId = 'general';
+  private activeProviderTab: ProviderId | null = null;
+  private refreshTitleModelOptions: (() => void) | null = null;
+  private syncProviderEnablement: ((providerId: ProviderId) => void) | null = null;
+  private renderGeneration = 0;
+  private readonly providerSettingsRenders = new Map<ProviderId, ProviderSettingsTabRenderHandle>();
+  private skillsTab: SkillsSettingsTab | null = null;
+  private readonly textEdits: DebouncedSettingsWriter<ClaudianSettings>;
+
+  constructor(app: App, plugin: Plugin, host: SettingsFeatureHost) {
+    super(app, plugin);
+    this.host = host;
+    this.textEdits = new DebouncedSettingsWriter(async (mutation) => {
+      let promptChanged = false;
+      // Compare inside the serialized transaction, then restart only after a changed prompt commits.
+      await host.mutateSettings((settings) => {
+        const { userName, systemPrompt, mediaFolder } = settings;
+        mutation(settings);
+        promptChanged = settings.userName !== userName
+          || settings.systemPrompt !== systemPrompt
+          || settings.mediaFolder !== mediaFolder;
+      });
+      if (promptChanged) await this.restartServiceForPromptChange();
+    }, () => { new Notice('Failed to save settings'); });
+  }
+
+  getSettingDefinitions(): SettingDefinitionItem[] {
+    return [{
+      name: 'Claudian',
+      searchable: false,
+      render: setting => this.renderSettings(setting.settingEl),
+    }];
+  }
+
+  private renderSettings(containerEl: HTMLElement): () => void {
+    void this.textEdits.flush();
+    this.disposeProviderSettingsRenders();
+    this.disposeSkillsTab();
+    const renderGeneration = ++this.renderGeneration;
+    containerEl.empty();
+    containerEl.addClass('claudian-settings');
+    const settingItems = containerEl.parentElement;
+    if (settingItems?.classList.contains('setting-items')) {
+      settingItems.classList.add('claudian-settings-items');
+    }
+    this.refreshTitleModelOptions = null;
+    this.syncProviderEnablement = null;
+
+    setLocale(this.host.settings.locale as Locale);
+
+    const providerTabs = ProviderRegistry.getRegisteredProviderIds();
+    const tabIds: SettingsTabId[] = ['general', 'providers', 'skills'];
+    const preferredProvider = providerTabs.includes(this.host.settings.settingsProvider)
+      ? this.host.settings.settingsProvider
+      : providerTabs[0] ?? null;
+    if (!this.activeProviderTab || !providerTabs.includes(this.activeProviderTab)) {
+      this.activeProviderTab = preferredProvider;
+    }
+
+    const tabBar = containerEl.createDiv({ cls: 'claudian-settings-tabs' });
+    const tabButtons = new Map<SettingsTabId, HTMLButtonElement>();
+    const tabContents = new Map<SettingsTabId, HTMLDivElement>();
+    const providersContent = containerEl.createDiv({
+      cls: `claudian-settings-tab-content${this.activeTab === 'providers' ? ' claudian-settings-tab-content--active' : ''}`,
+    });
+    tabContents.set('providers', providersContent);
+    const providerTabBar = providersContent.createDiv({
+      cls: 'claudian-settings-provider-tabs',
+    });
+    const providerContentHost = providersContent.createDiv({
+      cls: 'claudian-settings-provider-content-host',
+    });
+    const providerButtons = new Map<ProviderId, HTMLButtonElement>();
+    const providerContents = new Map<ProviderId, HTMLDivElement>();
+    const renderedProviderIds = new Set<ProviderId>();
+    // Disabled providers keep only their installation card; later sections collapse until enabled.
+    const syncProviderEnablement = (providerId: ProviderId): void => {
+      providerContents.get(providerId)?.toggleClass(
+        'claudian-settings-provider-content--disabled',
+        !ProviderRegistry.isEnabled(providerId, this.host.settings),
+      );
+    };
+    this.syncProviderEnablement = syncProviderEnablement;
+
+    const renderProviderTab = async (providerId: ProviderId): Promise<void> => {
+      if (renderedProviderIds.has(providerId)) return;
+      const providerContent = providerContents.get(providerId);
+      if (!providerContent) return;
+      renderedProviderIds.add(providerId);
+      providerContent.empty();
+      providerContent.createDiv({
+        cls: 'claudian-settings-provider-loading',
+        text: `Loading ${ProviderRegistry.getProviderDisplayName(providerId)} settings...`,
+      });
+
+      try {
+        await ProviderWorkspaceRegistry.ensureInitialized(
+          this.host.providerHost,
+          providerId,
+          'settings-tab',
+        );
+        if (renderGeneration !== this.renderGeneration) return;
+        providerContent.empty();
+        const renderer = ProviderWorkspaceRegistry.getSettingsTabRenderer(providerId);
+        if (!renderer) {
+          providerContent.createDiv({ text: t('settings.providerSettings.unavailable') });
+          return;
+        }
+        const handle = renderer.render(providerContent, {
+          plugin: this.host.providerHost,
+          notifyProviderModelOptionsChanged: (changedProviderId) => {
+            this.notifyProviderModelOptionsChanged(changedProviderId);
+          },
+        });
+        if (handle) this.providerSettingsRenders.set(providerId, handle);
+        frameSettingsGroups(providerContent);
+        syncProviderEnablement(providerId);
+      } catch (error) {
+        if (renderGeneration !== this.renderGeneration) return;
+        renderedProviderIds.delete(providerId);
+        providerContent.empty();
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        providerContent.createDiv({
+          cls: 'claudian-setting-validation claudian-setting-validation-error',
+          text: t('settings.providerSettings.loadFailed', { message }),
+        });
+      }
+    };
+
+    for (const id of tabIds) {
+      const label = t(`settings.tabs.${id}`);
+      const button = tabBar.createEl('button', {
+        cls: `claudian-settings-tab${id === this.activeTab ? ' claudian-settings-tab--active' : ''}`,
+        text: label,
+      });
+      button.addEventListener('click', () => {
+        void this.textEdits.flush();
+        this.skillsTab?.flush();
+        this.activeTab = id;
+        for (const tabId of tabIds) {
+          tabButtons.get(tabId)?.toggleClass('claudian-settings-tab--active', tabId === id);
+          tabContents.get(tabId)?.toggleClass('claudian-settings-tab-content--active', tabId === id);
+        }
+        if (id === 'providers' && this.activeProviderTab) {
+          void renderProviderTab(this.activeProviderTab);
+        }
+        if (id === 'skills') renderSkillsTab();
+      });
+      tabButtons.set(id, button);
+    }
+
+    for (const id of tabIds.filter(id => id !== 'providers')) {
+      const content = containerEl.createDiv({
+        cls: `claudian-settings-tab-content claudian-settings-${id}${id === this.activeTab ? ' claudian-settings-tab-content--active' : ''}`,
+      });
+      tabContents.set(id, content);
+    }
+
+    this.renderGeneralTab(tabContents.get('general')!);
+    frameSettingsGroups(tabContents.get('general')!);
+
+    // Rendered on first activation so opening settings never touches skill folders.
+    const renderSkillsTab = (): void => {
+      if (this.skillsTab) return;
+      this.skillsTab = new SkillsSettingsTab(
+        tabContents.get('skills')!,
+        this.app,
+        this.host.storage.getAdapter(),
+        this.host,
+        this.textEdits,
+      );
+    };
+    if (this.activeTab === 'skills') renderSkillsTab();
+
+    for (const providerId of providerTabs) {
+      const content = providerContentHost.createDiv({
+        cls: `claudian-settings-provider-content${providerId === this.activeProviderTab ? ' claudian-settings-provider-content--active' : ''}`,
+      });
+      providerContents.set(providerId, content);
+      const providerName = ProviderRegistry.getProviderDisplayName(providerId);
+      const providerIcon = ProviderRegistry.getChatUIConfig(providerId).getProviderIcon?.();
+      // A tab shows its provider's icon; the name stays its accessible name and hover tooltip.
+      const button = providerTabBar.createEl('button', {
+        attr: { 'aria-label': providerName, 'data-provider': providerId, type: 'button' },
+        cls: `claudian-settings-provider-tab${providerIcon ? ' claudian-settings-provider-tab--icon' : ''}${providerId === this.activeProviderTab ? ' claudian-settings-provider-tab--active' : ''}`,
+        ...(providerIcon ? {} : { text: providerName }),
+      });
+      if (providerIcon) {
+        createProviderIconSvg(providerIcon, { className: 'claudian-settings-provider-icon', dataProvider: providerId, parent: button });
+      }
+      button.addEventListener('click', () => {
+        this.activeProviderTab = providerId;
+        for (const candidate of providerTabs) {
+          providerButtons.get(candidate)?.toggleClass(
+            'claudian-settings-provider-tab--active',
+            candidate === providerId,
+          );
+          providerContents.get(candidate)?.toggleClass(
+            'claudian-settings-provider-content--active',
+            candidate === providerId,
+          );
+        }
+        void renderProviderTab(providerId);
+      });
+      providerButtons.set(providerId, button);
+    }
+
+    if (this.activeTab === 'providers' && this.activeProviderTab) {
+      void renderProviderTab(this.activeProviderTab);
+    }
+
+    return () => {
+      if (renderGeneration !== this.renderGeneration) return;
+      void this.textEdits.flush();
+      settingItems?.classList.remove('claudian-settings-items');
+      this.renderGeneration += 1;
+      this.disposeProviderSettingsRenders();
+      this.disposeSkillsTab();
+      this.refreshTitleModelOptions = null;
+      this.syncProviderEnablement = null;
+    };
+  }
+
+  private renderGeneralTab(container: HTMLElement): void {
+    const textDraft = this.textEdits.projectDraft(this.host.settings);
+    new AccessibleSetting(container)
+      .setName(t('settings.language.name'))
+      .setDesc(t('settings.language.desc'))
+      .addDropdown((dropdown) => {
+        const locales = getAvailableLocales();
+        for (const locale of locales) {
+          dropdown.addOption(locale, getLocaleDisplayName(locale));
+        }
+        dropdown
+          .setValue(this.host.settings.locale)
+          .onChange(async (value) => {
+            const locale = value as Locale;
+            if (!setLocale(locale)) {
+              dropdown.setValue(this.host.settings.locale);
+              return;
+            }
+            try {
+              await this.host.mutateSettings((settings) => {
+                settings.locale = locale;
+              });
+            } finally {
+              const committedLocale = this.host.settings.locale;
+              setLocale(committedLocale as Locale);
+              dropdown.setValue(committedLocale);
+            }
+            this.update();
+          });
+      });
+
+    // --- Display ---
+
+    new AccessibleSetting(container).setName(t('settings.display')).setHeading();
+
+    new AccessibleSetting(container)
+      .setName(t('settings.chatViewPlacement.name'))
+      .setDesc(t('settings.chatViewPlacement.desc'))
+      .addDropdown((dropdown) => {
+        dropdown
+          .addOption('right-sidebar', t('settings.chatViewPlacement.rightSidebar'))
+          .addOption('left-sidebar', t('settings.chatViewPlacement.leftSidebar'))
+          .addOption('main-tab', t('settings.chatViewPlacement.mainTab'));
+        bindCommittedControl(dropdown, () => this.host.settings.chatViewPlacement, async value => {
+            await this.host.mutateSettings(settings => { settings.chatViewPlacement = value as ChatViewPlacement; });
+          });
+      });
+
+    new AccessibleSetting(container)
+      .setName(t('settings.chatFontScale.name'))
+      .setDesc(t('settings.chatFontScale.desc'))
+      .addSlider((slider) => {
+        // Percentages of the note font size; the slider commits on release.
+        slider.setLimits(80, 120, 5).setDynamicTooltip();
+        bindCommittedControl(slider, () => this.host.settings.chatFontScale, async value => {
+          await this.host.mutateSettings(settings => { settings.chatFontScale = value; });
+        });
+      });
+
+    new AccessibleSetting(container)
+      .setName(t('settings.enableZenMode.name'))
+      .setDesc(t('settings.enableZenMode.desc'))
+      .addToggle((toggle) => {
+        bindCommittedControl(toggle, () => this.host.settings.enableZenMode, async value => {
+          await this.host.mutateSettings(settings => { settings.enableZenMode = value; });
+        });
+      });
+
+    new AccessibleSetting(container)
+      .setName(t('settings.enableDualPane.name'))
+      .setDesc(t('settings.enableDualPane.desc'))
+      .addToggle((toggle) => {
+        bindCommittedControl(toggle, () => this.host.settings.enableDualPane ?? true, async value => {
+          await this.host.mutateSettings(settings => { settings.enableDualPane = value; });
+        }, () => this.update());
+      });
+
+    if (this.host.settings.enableDualPane ?? true) {
+      new AccessibleSetting(container)
+        .setName(t('settings.dualPaneSide.name'))
+        .setDesc(t('settings.dualPaneSide.desc'))
+        .addDropdown((dropdown) => {
+          dropdown
+            .addOption('left', t('settings.dualPaneSide.left'))
+            .addOption('right', t('settings.dualPaneSide.right'));
+          bindCommittedControl(dropdown, () => this.host.settings.dualPaneSide ?? 'right', async value => {
+            await this.host.mutateSettings(settings => { settings.dualPaneSide = value as DualPaneSide; });
+          });
+        });
+
+    }
+
+    new AccessibleSetting(container)
+      .setName(t('settings.restoreTabsOnStartup.name'))
+      .setDesc(t('settings.restoreTabsOnStartup.desc'))
+      .addToggle((toggle) => {
+        bindCommittedControl(toggle, () => this.host.settings.restoreTabsOnStartup, async value => {
+          await this.host.mutateSettings(settings => { settings.restoreTabsOnStartup = value; });
+        });
+      });
+
+    new AccessibleSetting(container)
+      .setName(t('settings.showTabTitlesByDefault.name'))
+      .setDesc(t('settings.showTabTitlesByDefault.desc'))
+      .addToggle((toggle) => {
+        bindCommittedControl(toggle, () => this.host.settings.showTabTitlesByDefault, async value => {
+          await this.host.mutateSettings(settings => { settings.showTabTitlesByDefault = value; });
+        });
+      });
+
+    new AccessibleSetting(container)
+      .setName(t('settings.enableAutoScroll.name'))
+      .setDesc(t('settings.enableAutoScroll.desc'))
+      .addToggle((toggle) => {
+        bindCommittedControl(toggle, () => this.host.settings.enableAutoScroll ?? true, async value => {
+          await this.host.mutateSettings(settings => { settings.enableAutoScroll = value; });
+        });
+      });
+
+    new AccessibleSetting(container)
+      .setName(t('settings.deferMathRenderingDuringStreaming.name'))
+      .setDesc(t('settings.deferMathRenderingDuringStreaming.desc'))
+      .addToggle((toggle) => {
+        bindCommittedControl(toggle, () => this.host.settings.deferMathRenderingDuringStreaming ?? true, async value => {
+          await this.host.mutateSettings(settings => { settings.deferMathRenderingDuringStreaming = value; });
+        });
+      });
+
+    new AccessibleSetting(container)
+      .setName(t('settings.expandFileEditsByDefault.name'))
+      .setDesc(t('settings.expandFileEditsByDefault.desc'))
+      .addToggle((toggle) => {
+        bindCommittedControl(toggle, () => this.host.settings.expandFileEditsByDefault ?? false, async value => {
+          await this.host.mutateSettings(settings => { settings.expandFileEditsByDefault = value; });
+        });
+      });
+
+    new AccessibleSetting(container)
+      .setName(t('settings.pluginRenderedFenceLanguages.name'))
+      .setDesc(t('settings.pluginRenderedFenceLanguages.desc'))
+      .setClass('claudian-settings-textarea')
+      .addTextArea((text) => {
+        text
+          .setValue(textDraft.pluginRenderedFenceLanguages.join('\n'))
+          .onChange((value) => {
+            this.textEdits.schedule('pluginRenderedFenceLanguages', (settings) => {
+              settings.pluginRenderedFenceLanguages = value
+                .split(/\r?\n/)
+                .map((entry) => entry.trim())
+                .filter((entry) => entry.length > 0);
+            });
+          });
+        text.inputEl.addEventListener('blur', () => { void this.textEdits.flush(); });
+        text.inputEl.rows = 3;
+        text.inputEl.cols = 30;
+      });
+
+    // --- Conversations ---
+
+    new AccessibleSetting(container).setName(t('settings.conversations')).setHeading();
+
+    new AccessibleSetting(container)
+      .setName(t('settings.autoTitle.name'))
+      .setDesc(t('settings.autoTitle.desc'))
+      .addToggle((toggle) => {
+        bindCommittedControl(toggle, () => this.host.settings.enableAutoTitleGeneration, async value => {
+          await this.host.mutateSettings(settings => { settings.enableAutoTitleGeneration = value; });
+        }, () => this.update());
+      });
+
+    if (this.host.settings.enableAutoTitleGeneration) {
+      new AccessibleSetting(container)
+        .setName(t('settings.titleLanguage.name'))
+        .setDesc(t('settings.titleLanguage.desc'))
+        .addDropdown((dropdown) => {
+          dropdown.addOption('', t('settings.titleLanguage.followInterface'));
+          for (const locale of getAvailableLocales()) {
+            dropdown.addOption(locale, getLocaleDisplayName(locale));
+          }
+          bindCommittedControl(dropdown, () => this.host.settings.titleGenerationLocale || '', async value => {
+            await this.host.mutateSettings(settings => { settings.titleGenerationLocale = value; });
+          });
+        });
+
+      new AccessibleSetting(container)
+        .setName(t('settings.titleModel.name'))
+        .setDesc(t('settings.titleModel.desc'))
+        .addDropdown((dropdown) => {
+          dropdown.selectEl.setAttribute('aria-label', t('settings.titleModel.name'));
+          const warning = dropdown.selectEl.parentElement!.createDiv();
+          warning.className = 'claudian-setting-validation claudian-setting-validation-warning';
+          warning.setAttribute('role', 'status');
+          warning.setAttribute('aria-live', 'polite');
+          warning.textContent = t('settings.titleModel.unavailableWarning');
+          dropdown.selectEl.insertAdjacentElement('afterend', warning);
+          const refreshOptions = (): void => {
+            dropdown.selectEl.replaceChildren();
+            dropdown.addOption('', t('settings.titleModel.select'));
+            dropdown.selectEl.options[0].disabled = true;
+            dropdown.selectEl.required = true;
+
+            const settingsBag = this.host.settings as unknown as Record<string, unknown>;
+            warning.hidden = ProviderRegistry.resolveTitleGenerationSelection(settingsBag) !== null;
+            for (const model of ProviderRegistry.getTitleGenerationModelOptions(settingsBag)) {
+              dropdown.addOption(model.value, model.label);
+            }
+            const selected = this.host.settings.titleGenerationModel;
+            if (selected && !Array.from(dropdown.selectEl.options).some(option => option.value === selected)) {
+              dropdown.addOption(selected, `Unavailable: ${selected}`);
+              dropdown.selectEl.options[dropdown.selectEl.options.length - 1].disabled = true;
+            }
+            dropdown.setValue(this.host.settings.titleGenerationModel || '');
+          };
+
+          this.refreshTitleModelOptions = refreshOptions;
+          refreshOptions();
+          bindCommittedControl(dropdown, () => this.host.settings.titleGenerationModel || '', async value => {
+            await this.host.mutateSettings(settings => {
+              ProviderSettingsCoordinator.applyTitleGenerationModelSelection(settings, value);
+            });
+          }, refreshOptions);
+        });
+    }
+
+    new AccessibleSetting(container)
+      .setName(t('settings.sessionAutoArchiveAfter.name'))
+      .setDesc(createFragment((fragment) => {
+        fragment.append(
+          t('settings.sessionAutoArchiveAfter.desc'),
+          createEl('br'),
+          t('settings.sessionAutoArchiveAfter.multiSelectHint'),
+        );
+      }))
+      .addDropdown((dropdown) => {
+        dropdown
+          .addOption('off', t('settings.sessionAutoArchiveAfter.off'))
+          .addOption('7d', t('settings.sessionAutoArchiveAfter.days7'))
+          .addOption('14d', t('settings.sessionAutoArchiveAfter.days14'))
+          .addOption('30d', t('settings.sessionAutoArchiveAfter.days30'));
+          bindCommittedControl(dropdown, () => this.host.settings.sessionAutoArchiveAfter ?? 'off', async value => {
+            await this.host.mutateSettings(settings => { settings.sessionAutoArchiveAfter = value as SessionAutoArchiveAfter; });
+          });
+      });
+
+    // --- Content ---
+
+    new AccessibleSetting(container).setName(t('settings.content')).setHeading();
+
+    new AccessibleSetting(container)
+      .setName(t('settings.userName.name'))
+      .setDesc(t('settings.userName.desc'))
+      .addText((text) => {
+        text
+          .setPlaceholder(t('settings.userName.name'))
+          .setValue(textDraft.userName)
+          .onChange((value) => {
+            this.textEdits.schedule('userName', (settings) => {
+              settings.userName = value;
+            });
+          });
+        text.inputEl.addEventListener('blur', () => {
+          void this.textEdits.flush();
+        });
+      });
+
+    new AccessibleSetting(container)
+      .setName(t('settings.systemPrompt.name'))
+      .setDesc(t('settings.systemPrompt.desc'))
+      .setClass('claudian-settings-textarea')
+      .addTextArea((text) => {
+        text
+          .setPlaceholder(t('settings.systemPrompt.name'))
+          .setValue(textDraft.systemPrompt)
+          .onChange((value) => {
+            this.textEdits.schedule('systemPrompt', (settings) => {
+              settings.systemPrompt = value;
+            });
+          });
+        text.inputEl.rows = 6;
+        text.inputEl.cols = 50;
+        text.inputEl.addEventListener('blur', () => {
+          void this.textEdits.flush();
+        });
+      });
+
+    new AccessibleSetting(container)
+      .setName(t('settings.excludedTags.name'))
+      .setDesc(t('settings.excludedTags.desc'))
+      .setClass('claudian-settings-textarea')
+      .addTextArea((text) => {
+        text
+          .setPlaceholder('System\nprivate\ndraft')
+          .setValue(textDraft.excludedTags.join('\n'))
+          .onChange((value) => {
+            this.textEdits.schedule('excludedTags', (settings) => {
+              settings.excludedTags = value
+                .split(/\r?\n/)
+                .map((entry) => entry.trim().replace(/^#/, ''))
+                .filter((entry) => entry.length > 0);
+            });
+          });
+        text.inputEl.addEventListener('blur', () => { void this.textEdits.flush(); });
+        text.inputEl.rows = 4;
+        text.inputEl.cols = 30;
+      });
+
+    new AccessibleSetting(container)
+      .setName(t('settings.mediaFolder.name'))
+      .setDesc(t('settings.mediaFolder.desc'))
+      .addText((text) => {
+        text
+          .setPlaceholder('Attachments')
+          .setValue(textDraft.mediaFolder)
+          .onChange((value) => {
+            this.textEdits.schedule('mediaFolder', (settings) => {
+              settings.mediaFolder = value.trim();
+            });
+          });
+        text.inputEl.addClass('claudian-settings-media-input');
+        text.inputEl.addEventListener('blur', () => {
+          void this.textEdits.flush();
+        });
+      });
+
+    // --- Input ---
+
+    new AccessibleSetting(container).setName(t('settings.input')).setHeading();
+
+    new AccessibleSetting(container)
+      .setName(t('settings.requireCommandOrControlEnterToSend.name'))
+      .setDesc(t('settings.requireCommandOrControlEnterToSend.desc'))
+      .addToggle((toggle) => {
+        bindCommittedControl(toggle, () => this.host.settings.requireCommandOrControlEnterToSend ?? false, async value => {
+          await this.host.mutateSettings(settings => { settings.requireCommandOrControlEnterToSend = value; });
+        });
+      });
+
+    new AccessibleSetting(container)
+      .setName(t('settings.navMappings.name'))
+      .setDesc(t('settings.navMappings.desc'))
+      .setClass('claudian-settings-textarea')
+      .addTextArea((text) => {
+        let pendingValue = buildNavMappingText(this.host.settings.keyboardNavigation);
+        let saveTimeout: number | null = null;
+
+        const commitValue = async (showError: boolean): Promise<void> => {
+          if (saveTimeout !== null) {
+            window.clearTimeout(saveTimeout);
+            saveTimeout = null;
+          }
+
+          const submittedValue = pendingValue;
+          const result = parseNavMappings(submittedValue);
+          if (!result.settings) {
+            if (showError) {
+              new Notice(`${t('common.error')}: ${result.error}`);
+              pendingValue = buildNavMappingText(this.host.settings.keyboardNavigation);
+              text.setValue(pendingValue);
+            }
+            return;
+          }
+
+          await this.host.mutateSettings((settings) => {
+            settings.keyboardNavigation.scrollUpKey = result.settings!.scrollUp;
+            settings.keyboardNavigation.scrollDownKey = result.settings!.scrollDown;
+            settings.keyboardNavigation.focusInputKey = result.settings!.focusInput;
+          });
+          if (pendingValue !== submittedValue) return;
+          pendingValue = buildNavMappingText(this.host.settings.keyboardNavigation);
+          text.setValue(pendingValue);
+        };
+
+        const scheduleSave = (): void => {
+          if (saveTimeout !== null) {
+            window.clearTimeout(saveTimeout);
+          }
+          saveTimeout = window.setTimeout(() => {
+            void commitValue(false);
+          }, 500);
+        };
+
+        text
+          .setPlaceholder(pendingValue)
+          .setValue(pendingValue)
+          .onChange((value) => {
+            pendingValue = value;
+            scheduleSave();
+          });
+
+        text.inputEl.rows = 3;
+        text.inputEl.addEventListener('blur', () => {
+          void commitValue(true);
+        });
+      });
+
+    // --- Environment ---
+
+    renderEnvironmentSettingsSection({
+      container,
+      plugin: this.host.providerHost,
+      scope: 'shared',
+      heading: t('settings.environment'),
+      name: t('settings.sharedEnvironment.name'),
+      desc: t('settings.sharedEnvironment.desc'),
+      placeholder: 'PATH=/opt/homebrew/bin:/usr/local/bin\nHTTPS_PROXY=http://proxy.example.com:8080\nSSL_CERT_FILE=/path/to/cert.pem',
+    });
+  }
+
+  private disposeProviderSettingsRenders(): void {
+    for (const handle of this.providerSettingsRenders.values()) handle.dispose();
+    this.providerSettingsRenders.clear();
+  }
+
+  private disposeSkillsTab(): void {
+    this.skillsTab?.dispose();
+    this.skillsTab = null;
+  }
+
+  refreshModelOptions(): void {
+    for (const handle of this.providerSettingsRenders.values()) handle.refresh();
+    this.refreshTitleModelOptions?.();
+  }
+
+  private notifyProviderModelOptionsChanged(providerId: ProviderId): void {
+    this.host.notifyProviderChatOptionsChanged(providerId);
+    this.syncProviderEnablement?.(providerId);
+    this.refreshTitleModelOptions?.();
+  }
+
+  private async restartServiceForPromptChange(): Promise<void> {
+    try {
+      await this.host.providerHost.runProviderExecutionTransition(
+        ProviderRegistry.getRegisteredProviderIds(),
+        async () => undefined,
+      );
+    } catch {
+      // Changes will apply when the next provider execution starts.
+    }
+  }
+}

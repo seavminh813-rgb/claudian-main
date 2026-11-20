@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "paths": {
+      "@/*": ["./src/*"],
+      "@test/*": ["./tests/*"]
+    },
+    "skipLibCheck": true,
+    "noEmit": true,
+    "module": "ESNext",
+    "target": "ES6",
+    "allowJs": true,
+    "noImplicitAny": true,
+    "moduleResolution": "bundler",
+    "isolatedModules": true,
+    "strictNullChecks": true,
+    "resolveJsonModule": true,
+    "types": ["node"],
+    "lib": ["DOM", "ES2022"]
+  },
+  "include": ["src/**/*.ts"]
+}

@@ -1,0 +1,1250 @@
+import type {
+  ChatRewindMode,
+  ChatRewindPreview,
+  ChatRewindResult,
+  ConversationBranchRecoveryRequest,
+  ConversationBranchRequest,
+  ConversationBranchResult,
+  ConversationBranchState,
+  ProviderExecutionBackend,
+  ProviderExecutionConfiguration,
+  ProviderExecutionEvent,
+  ProviderExecutionInvalidationReason,
+  ProviderExecutionLifecycleRegistry,
+  ProviderExecutionRequest,
+  ProviderExecutionRun,
+  ProviderExecutionSession,
+  ProviderInteractionDismissReason,
+  ProviderInteractionPort,
+  ProviderNativeResumeSeed,
+  ProviderSessionEvent,
+  ProviderSessionSnapshot,
+  ProviderSessionToolPort,
+  ProviderSystemInstructions,
+  ProviderToolPolicy,
+} from '@/core/execution';
+import {
+  isBranchableExecutionSession,
+  isRewindableExecutionSession,
+  isSteerableExecutionSession,
+} from '@/core/execution';
+import { presentExecutionError } from '@/core/execution/presentExecutionError';
+import type {
+  ChatMessage,
+  ForkSource,
+  ImageAttachment,
+  ProviderId,
+} from '@/core/types';
+import { consumeExecutionEvents, isExecutionTerminalEvent } from '@/features/chat/execution/consumeExecutionEvents';
+import { ExecutionInteractions } from '@/features/chat/execution/ExecutionInteractions';
+import {
+  ExecutionSessionSupervisor,
+} from '@/features/chat/execution/ExecutionSessionSupervisor';
+import {
+  attachAcceptedSubmission,
+  attachRequestedTurnIdentity,
+  INITIAL_REQUESTED_TURN_IDENTITY,
+  reduceRequestedTurnIdentity,
+} from '@/features/chat/execution/RequestedTurnIdentity';
+import { SessionEventStream } from '@/features/chat/execution/SessionEventStream';
+import { t } from '@/i18n/i18n';
+import { throwIfAborted } from '@/utils/abort';
+import { toError } from '@/utils/error';
+
+
+/** Session tools bound to one conversation; disposing releases the binding. */
+export interface SessionToolBinding {
+  readonly port: ProviderSessionToolPort;
+  dispose(): void;
+}
+
+export type ChatExecutionCoordinatorState =
+  | 'absent'
+  | 'idle'
+  | 'active'
+  | 'stale'
+  | 'disposed';
+
+export interface ChatExecutionConversationBinding {
+  readonly conversationId: string;
+  readonly providerId: ProviderId;
+  readonly resumeSeed?: ProviderNativeResumeSeed;
+}
+
+export interface ChatTurnMessageBinding {
+  readonly user: ChatMessage;
+  readonly assistant: ChatMessage;
+}
+
+export interface ChatTurnSubmission {
+  /** Revalidate transient interaction ownership after asynchronous preparation. */
+  assertBeforeHandoff?: () => void;
+  readonly submissionId: string;
+  readonly timestamp: number;
+  readonly rawDisplayText: string;
+  readonly canonicalText: string;
+  readonly images: readonly ImageAttachment[];
+  readonly context?: ProviderExecutionRequest['context'];
+  readonly conversationHistory?: readonly ChatMessage[];
+  readonly configuration: ProviderExecutionConfiguration;
+  readonly toolPolicy: ProviderToolPolicy;
+  readonly messages?: ChatTurnMessageBinding;
+}
+
+export interface ChatExecutionPersistence {
+  registerExecutionBinding(
+    conversationId: string,
+    bindingId: string,
+    providerGeneration: number,
+  ): void;
+  persistExecutionSnapshot(
+    conversationId: string,
+    bindingId: string,
+    providerGeneration: number,
+    snapshot: ProviderSessionSnapshot,
+  ): Promise<boolean>;
+  releaseExecutionBinding(conversationId: string, bindingId: string): void;
+  assertConversationExecutionAuthority(
+    conversationId: string,
+    bindingId: string,
+    providerGeneration: number,
+  ): Promise<void>;
+  recordConversationActivity(conversationId: string, timestamp: number): Promise<void>;
+}
+
+export interface ChatExecutionEventContext {
+  readonly conversationId: string;
+  readonly bindingId: string;
+  readonly providerGeneration: number;
+  readonly session: ProviderExecutionSession;
+  readonly submissionId?: string;
+}
+
+export interface ChatExecutionCoordinatorDeps {
+  readonly lifecycleRegistry: ProviderExecutionLifecycleRegistry;
+  readonly resolveBackend: (providerId: ProviderId) => ProviderExecutionBackend;
+  readonly persistence: ChatExecutionPersistence;
+  readonly interactionPort: ProviderInteractionPort;
+  readonly workingDirectory: string;
+  readonly createId: () => string;
+  readonly bindSessionTools?: (conversationId: string) => SessionToolBinding;
+  /** Reads the stored binding, which may have advanced since this coordinator bound it. */
+  readonly loadConversationBinding?: (conversationId: string) => Promise<ChatExecutionConversationBinding | null>;
+  readonly onRequestedEvent?: (
+    event: ProviderExecutionEvent,
+    context: ChatExecutionEventContext,
+  ) => void | Promise<void>;
+  readonly onSessionEvent?: (
+    event: ProviderSessionEvent,
+    context: ChatExecutionEventContext,
+  ) => void | Promise<void>;
+  readonly onBackgroundWorkChanged?: (isWorking: boolean) => void;
+  readonly onError?: (error: unknown) => void;
+  /** Releases an idle provider session after this long; omitted keeps it until disposal. */
+  readonly idleReleaseMs?: number;
+  /** Owner work invisible to the coordinator; an idle session is released only while this holds. */
+  readonly isOwnerIdle?: () => boolean;
+  readonly onIdleRelease?: () => void;
+}
+
+export interface ChatExecutionResult {
+  readonly status:
+    | 'completed'
+    | 'cancelled'
+    | 'error'
+    | 'invalidated';
+  readonly accepted: boolean;
+  readonly nativeUserMessageId?: string;
+  readonly nativeAssistantMessageId?: string;
+  readonly nativeCheckpointId?: string;
+  readonly error?: Extract<ProviderExecutionEvent, { type: 'execution_error' }>;
+}
+
+/**
+ * Whether a steer reached the provider. Only 'not-sent' may return the input for resend;
+ * `error` is the failure that stopped it before handoff.
+ */
+export type ChatSteerOutcome =
+  | { readonly delivery: 'accepted' }
+  | { readonly delivery: 'not-sent'; readonly error?: ChatExecutionPreHandoffError }
+  | { readonly delivery: 'uncertain'; readonly error: unknown };
+
+interface SessionBinding {
+  readonly conversation: ChatExecutionConversationBinding;
+  readonly bindingId: string;
+  readonly generation: number;
+  readonly session: ProviderExecutionSession;
+  lastSnapshotRevision: number;
+  pendingWorkCount: number;
+  readonly events: SessionEventStream;
+  readonly sessionTools?: SessionToolBinding;
+  model?: string;
+  /** Native history changed outside this process; it must be replaced before it handles another turn. */
+  nativeHistoryChanged?: boolean;
+}
+
+interface ActiveExecution {
+  readonly binding: SessionBinding;
+  readonly run: ProviderExecutionRun;
+  readonly submission: ChatTurnSubmission;
+  readonly requestController: AbortController;
+  terminationOverride: 'cancelled' | 'invalidated' | null;
+}
+
+/** The one foreground operation: a turn, holding its execution once handed off, or a branch change. */
+interface ForegroundTurn {
+  readonly kind: 'turn';
+  readonly controller: AbortController;
+  execution: ActiveExecution | null;
+}
+
+type ForegroundOperation = ForegroundTurn | { readonly kind: 'branch'; readonly controller: AbortController };
+
+interface PendingSteerAttempt {
+  readonly conversationId: string;
+  acceptedByProviderEvent: boolean;
+  acceptancePromise: Promise<void> | null;
+  readonly submission: ChatTurnSubmission;
+}
+
+export class ChatExecutionInteractionStaleError extends Error {
+  constructor(readonly interactionId: string) {
+    super(`Provider interaction is stale: ${interactionId}`);
+    this.name = 'ChatExecutionInteractionStaleError';
+  }
+}
+
+export class ChatExecutionPreHandoffError extends Error {
+  override readonly cause: unknown;
+
+  /** Explanation safe to show the user; absent for internal failures. */
+  constructor(cause: unknown, readonly userMessage?: string) {
+    super(cause instanceof Error ? cause.message : String(cause));
+    this.name = 'ChatExecutionPreHandoffError';
+    this.cause = cause;
+  }
+}
+
+export class ChatExecutionCoordinator {
+  readonly #supervisor: ExecutionSessionSupervisor;
+  readonly #interactions: ExecutionInteractions;
+  #conversation: ChatExecutionConversationBinding | null = null;
+  #sessionBinding: SessionBinding | null = null;
+  #foreground: ForegroundOperation | null = null;
+  #branchRecoveryRequired = false;
+  readonly #pendingSteerAttempts = new Map<string, PendingSteerAttempt>();
+  #disposed = false;
+  #disposePromise: Promise<void> | null = null;
+  /** Settles once every released binding has given up its claim; replacements register only after it. */
+  #bindingReleases: Promise<void> = Promise.resolve();
+  #stale = false;
+  #publishedBackgroundWork = false;
+  #protectedOperationCount = 0;
+  #preparationTail: Promise<void> = Promise.resolve();
+  #idleTimer: number | null = null;
+  #idleTimerGeneration = 0;
+
+  /** The directory this coordinator's sessions run in, captured when the session runtime was assembled. */
+  get workingDirectory(): string {
+    return this.deps.workingDirectory;
+  }
+
+  constructor(private readonly deps: ChatExecutionCoordinatorDeps) {
+    this.#supervisor = new ExecutionSessionSupervisor(deps.lifecycleRegistry);
+    this.#interactions = new ExecutionInteractions({
+      port: deps.interactionPort,
+      isCurrent: request => this.#isInteractionCurrent(request),
+      staleError: id => new ChatExecutionInteractionStaleError(id),
+      onPendingChange: () => this.#restartIdleTimer(),
+    });
+  }
+
+  get state(): ChatExecutionCoordinatorState {
+    if (this.#disposed) return 'disposed';
+    if (this.#activeExecution) return 'active';
+    if (this.#stale) return 'stale';
+    return this.#sessionBinding ? 'idle' : 'absent';
+  }
+
+  /** Steering joins the active request's already-resolved instructions. */
+  get systemInstructions(): ProviderSystemInstructions | null {
+    return this.#activeExecution?.submission.configuration.systemInstructions ?? null;
+  }
+
+  get snapshot(): ProviderSessionSnapshot | null {
+    return this.#sessionBinding?.session.getSnapshot() ?? null;
+  }
+
+  getCommandSnapshot(conversationId: string | null, providerId: ProviderId) {
+    const binding = this.#sessionBinding;
+    if (
+      !binding || this.#stale || !this.#isBindingCurrent(binding)
+      || binding.conversation.conversationId !== conversationId
+      || binding.session.providerId !== providerId
+    ) return undefined;
+    return binding.session.getCommandSnapshot?.();
+  }
+
+  get hasBackgroundWork(): boolean {
+    return (this.#sessionBinding?.events.hasBackgroundWork ?? false)
+      || (this.#sessionBinding?.session.hasBackgroundWork?.() ?? false);
+  }
+
+  /** The same transition-published projection used by the working indicator. */
+  get publishedBackgroundWork(): boolean { return this.#publishedBackgroundWork; }
+
+  /** Work observers recompute from current state, so only transitions are published. */
+  #publishBackgroundWork(): void {
+    const isWorking = this.hasBackgroundWork;
+    if (isWorking === this.#publishedBackgroundWork) return;
+    this.#publishedBackgroundWork = isWorking;
+    this.deps.onBackgroundWorkChanged?.(isWorking);
+  }
+
+  isEventContextCurrent(context: ChatExecutionEventContext): boolean {
+    const binding = this.#sessionBinding;
+    return Boolean(
+      binding
+      && binding.conversation.conversationId === context.conversationId
+      && binding.bindingId === context.bindingId
+      && binding.generation === context.providerGeneration
+      && binding.session === context.session
+      && this.#isBindingCurrent(binding),
+    );
+  }
+
+  async bindConversation(
+    conversation: ChatExecutionConversationBinding | null,
+  ): Promise<void> {
+    await this.#runProtectedOperation(() => this.#bindConversationProtected(conversation));
+  }
+
+  async #bindConversationProtected(
+    conversation: ChatExecutionConversationBinding | null,
+  ): Promise<void> {
+    this.#assertAvailable();
+    if (sameConversationBinding(this.#conversation, conversation)) {
+      // Keep the canonical binding so event guards can compare it by identity.
+      return;
+    }
+
+    this.#invalidateActiveExecution('invalidated', 'conversation-switched');
+    this.#pendingSteerAttempts.clear();
+    this.#conversation = conversation;
+    this.#branchRecoveryRequired = false;
+    this.#stale = false;
+    await this.#releaseSessionBinding();
+  }
+
+  async prepare(): Promise<void> {
+    await this.#runProtectedOperation(() => this.#enqueuePreparation());
+  }
+
+  #enqueuePreparation(operation: () => Promise<void> = () => this.#prepareSession()): Promise<void> {
+    const pending = this.#preparationTail
+      .catch(() => undefined)
+      .then(operation);
+    this.#preparationTail = pending.then(
+      () => undefined,
+      () => undefined,
+    );
+    return pending;
+  }
+
+  async #prepareSession(): Promise<void> {
+    // A release can start while this waits; nothing below awaits before registering, so once the barrier is
+    // unchanged after settling, no release can start before the claim.
+    let releases: Promise<void>;
+    do {
+      releases = this.#bindingReleases;
+      await releases;
+    } while (releases !== this.#bindingReleases);
+    this.#assertAvailable();
+    const conversation = this.#requireConversation();
+    const current = this.#sessionBinding;
+    if (current && this.#isBindingCurrent(current)) return;
+    const backend = this.deps.resolveBackend(conversation.providerId);
+    if (backend.providerId !== conversation.providerId) {
+      throw new Error(
+        `Execution backend provider mismatch: expected ${conversation.providerId}, got ${backend.providerId}`,
+      );
+    }
+
+    const sessionTools = this.deps.bindSessionTools?.(conversation.conversationId);
+    let supervised;
+    try {
+      supervised = this.#supervisor.acquire(
+        backend,
+        {
+          lifecycle: 'persistent',
+          nativePersistence: 'enabled',
+          resumeSeed: conversation.resumeSeed,
+          workingDirectory: this.deps.workingDirectory,
+          interactionPort: this.#interactions,
+          sessionTools: sessionTools?.port,
+        },
+        (reason, released) => this.#handleLeaseInvalidation(reason, released),
+        (event) => this.#handleSessionEvent(event),
+      );
+    } catch (error) {
+      sessionTools?.dispose();
+      throw error;
+    }
+    const binding: SessionBinding = {
+      conversation,
+      bindingId: this.deps.createId(),
+      generation: supervised.generation,
+      session: supervised.session,
+      lastSnapshotRevision: -1,
+      pendingWorkCount: 0,
+      events: new SessionEventStream(supervised.session.sessionInstanceId),
+      sessionTools,
+    };
+    this.#sessionBinding = binding;
+    this.#stale = false;
+    try {
+      this.deps.persistence.registerExecutionBinding(
+        conversation.conversationId,
+        binding.bindingId,
+        binding.generation,
+      );
+      await this.#persistSnapshot(binding, binding.session.getSnapshot());
+    } catch (error) {
+      await this.#releaseSessionBinding();
+      throw error;
+    }
+  }
+
+  async execute(submission: ChatTurnSubmission, signal?: AbortSignal): Promise<ChatExecutionResult> {
+    this.#assertAvailable();
+    if (this.#branchRecoveryRequired) throw new ChatExecutionPreHandoffError('Conversation branch recovery must finish before sending.');
+    if (this.#foreground) throw new Error('A chat execution is already active');
+    const turn: ForegroundTurn = { controller: new AbortController(), execution: null, kind: 'turn' };
+    this.#foreground = turn;
+    const cancel = () => this.cancel();
+    signal?.addEventListener('abort', cancel, { once: true });
+    if (signal?.aborted) turn.controller.abort();
+    try {
+      return await this.#runProtectedOperation(() => this.#executeProtected(submission, turn));
+    } finally {
+      signal?.removeEventListener('abort', cancel);
+      if (this.#foreground === turn) this.#foreground = null;
+    }
+  }
+
+  get #activeExecution(): ActiveExecution | null {
+    const foreground = this.#foreground;
+    return foreground?.kind === 'turn' ? foreground.execution : null;
+  }
+
+  async #executeProtected(
+    submission: ChatTurnSubmission,
+    turn: ForegroundTurn,
+  ): Promise<ChatExecutionResult> {
+    const requestController = turn.controller;
+    let conversation: ChatExecutionConversationBinding;
+    let binding: SessionBinding;
+    let run: ProviderExecutionRun;
+    try {
+      await this.#replaceChangedHistorySession();
+      conversation = this.#requireConversation();
+      throwIfAborted(requestController.signal, 'Turn cancelled before provider handoff');
+      await this.prepare();
+      throwIfAborted(requestController.signal, 'Turn cancelled before provider handoff');
+      if (!sameConversationBinding(conversation, this.#conversation)) {
+        throw new Error('Chat execution binding changed before provider handoff');
+      }
+      binding = this.#requireCurrentSessionBinding();
+      await this.deps.persistence.assertConversationExecutionAuthority(
+        conversation.conversationId,
+        binding.bindingId,
+        binding.generation,
+      );
+      if (!sameConversationBinding(conversation, this.#conversation)) {
+        throw new Error('Chat execution binding changed before provider handoff');
+      }
+      throwIfAborted(requestController.signal, 'Turn cancelled before provider handoff');
+      binding = this.#requireCurrentSessionBinding();
+      submission.assertBeforeHandoff?.();
+      binding.model = submission.configuration.model;
+      run = binding.session.execute(
+        createExecutionRequest(submission, requestController.signal),
+      );
+    } catch (error) {
+      throw error instanceof ChatExecutionPreHandoffError ? error : new ChatExecutionPreHandoffError(error);
+    }
+
+    const active: ActiveExecution = {
+      binding,
+      run,
+      requestController,
+      submission,
+      terminationOverride: null,
+    };
+    turn.execution = active;
+
+    try {
+      return await this.#consumeRequestedEvents(active);
+    } finally {
+      this.#interactions.dismissTurn(active.run.turnId, 'native-rejected');
+      if (turn.execution === active) turn.execution = null;
+    }
+  }
+
+  cancel(): void {
+    const foreground = this.#foreground;
+    if (!foreground || foreground.controller.signal.aborted) return;
+    foreground.controller.abort();
+    const active = foreground.kind === 'turn' ? foreground.execution : null;
+    if (!active) return;
+    active.terminationOverride = 'cancelled';
+    this.#interactions.dismissTurn(active.run.turnId, 'cancelled');
+    active.run.cancel();
+  }
+
+  /** Stops provider background work; an active foreground execution is cancelled through `cancel`. */
+  cancelBackgroundWork(): void {
+    if (this.#activeExecution || !this.hasBackgroundWork) return;
+    this.#sessionBinding?.session.cancel();
+  }
+
+  async steer(submission: ChatTurnSubmission, signal?: AbortSignal): Promise<ChatSteerOutcome> {
+    const controller = new AbortController();
+    const sources = [signal, this.#foreground?.controller.signal];
+    const cancel = () => controller.abort();
+    for (const source of sources) {
+      source?.addEventListener('abort', cancel, { once: true });
+      if (source?.aborted) cancel();
+    }
+    try {
+      const accepted = await this.#runProtectedOperation(() => this.#steerProtected(submission, controller.signal));
+      return { delivery: accepted ? 'accepted' : 'not-sent' };
+    } catch (error) {
+      return error instanceof ChatExecutionPreHandoffError
+        ? { delivery: 'not-sent', error }
+        : { delivery: 'uncertain', error };
+    } finally {
+      for (const source of sources) source?.removeEventListener('abort', cancel);
+    }
+  }
+
+  async #steerProtected(submission: ChatTurnSubmission, signal: AbortSignal): Promise<boolean> {
+    if (this.#branchRecoveryRequired || signal.aborted) return false;
+    this.#assertAvailable();
+    const binding = this.#requireCurrentSessionBinding();
+    const active = this.#activeExecution;
+    if (!isSteerableExecutionSession(binding.session)) return false;
+    try {
+      await this.deps.persistence.assertConversationExecutionAuthority(
+        binding.conversation.conversationId, binding.bindingId, binding.generation,
+      );
+      if (signal.aborted || this.#activeExecution !== active) return false;
+      if (!this.#isBindingCurrent(binding)) throw new Error('Conversation binding changed before steering');
+    } catch (error) {
+      throw new ChatExecutionPreHandoffError(error);
+    }
+    const attempt: PendingSteerAttempt = {
+      acceptedByProviderEvent: false,
+      acceptancePromise: null,
+      conversationId: binding.conversation.conversationId,
+      submission,
+    };
+    this.#pendingSteerAttempts.set(submission.submissionId, attempt);
+    let retainForReconciliation = false;
+    try {
+      let accepted: boolean;
+      try {
+        accepted = await binding.session.steer(
+          createExecutionRequest(submission, signal),
+        );
+      } catch (error) {
+        if (!attempt.acceptedByProviderEvent) {
+          retainForReconciliation = true;
+          throw error;
+        }
+        await this.#acceptPendingSteerAttempt(attempt);
+        return true;
+      }
+
+      if (attempt.acceptedByProviderEvent) {
+        await this.#acceptPendingSteerAttempt(attempt);
+        return true;
+      }
+      if (!accepted) return false;
+      retainForReconciliation = true;
+      await this.#acceptPendingSteerAttempt(attempt);
+      return true;
+    } finally {
+      if (
+        !retainForReconciliation
+        && this.#pendingSteerAttempts.get(submission.submissionId) === attempt
+      ) {
+        this.#pendingSteerAttempts.delete(submission.submissionId);
+      }
+    }
+  }
+
+  /** Submitted input retained until its echo or binding disposal, independently of the active queue entry. */
+  getSteerSubmission(inputId: string): ChatTurnSubmission | undefined {
+    return this.#pendingSteerAttempts.get(inputId)?.submission;
+  }
+
+  async acceptSteerFromProviderEvent(
+    submissionId: string,
+    nativeUserMessageId?: string,
+  ): Promise<boolean> {
+    const attempt = this.#pendingSteerAttempts.get(submissionId);
+    if (!attempt) return false;
+
+    attempt.acceptedByProviderEvent = true;
+    try {
+      await this.#acceptPendingSteerAttempt(attempt, nativeUserMessageId);
+      return true;
+    } finally {
+      if (this.#pendingSteerAttempts.get(submissionId) === attempt) {
+        this.#pendingSteerAttempts.delete(submissionId);
+        this.#restartIdleTimer();
+      }
+    }
+  }
+
+  releaseSteerCorrelation(submissionId: string): void {
+    this.#pendingSteerAttempts.delete(submissionId);
+    this.#restartIdleTimer();
+  }
+
+  async previewRewind(
+    userMessageId: string,
+    assistantMessageId: string | undefined,
+    mode?: ChatRewindMode,
+  ): Promise<ChatRewindPreview> {
+    return this.#runProtectedOperation(() => this.#previewRewindProtected(
+      userMessageId,
+      assistantMessageId,
+      mode,
+    ));
+  }
+
+  async getConversationBranches(messages: readonly ChatMessage[] = []): Promise<ConversationBranchState> {
+    const binding = this.#sessionBinding;
+    if (!binding || !this.#isBindingCurrent(binding) || !isBranchableExecutionSession(binding.session)) return { branches: {}, userMessageIds: {} };
+    const result = await binding.session.getConversationBranches(messages);
+    return this.#isBindingCurrent(binding) ? result : { branches: {}, userMessageIds: {} };
+  }
+
+  get supportsConversationBranches(): boolean {
+    const binding = this.#sessionBinding;
+    return !!binding && this.#isBindingCurrent(binding) && isBranchableExecutionSession(binding.session);
+  }
+
+  navigateConversationBranch(request: ConversationBranchRequest): Promise<ConversationBranchResult> {
+    return this.#changeConversationBranch(request);
+  }
+
+  reconcileConversationBranch(request: ConversationBranchRecoveryRequest): Promise<ConversationBranchResult> {
+    return this.#changeConversationBranch(request);
+  }
+
+  async #changeConversationBranch(request: ConversationBranchRequest | ConversationBranchRecoveryRequest): Promise<ConversationBranchResult> {
+    if (this.#branchRecoveryRequired && 'userMessageId' in request) {
+      return { status: 'recovery-required', error: 'Reconcile the current branch before navigating again.' };
+    }
+    if (this.#foreground || this.#protectedOperationCount > 0 || this.hasBackgroundWork || this.#interactions.hasPending) {
+      return { status: 'failed', error: 'Conversation is busy.' };
+    }
+    const controller = new AbortController();
+    const operation: ForegroundOperation = { controller, kind: 'branch' };
+    this.#foreground = operation;
+    const conversation = this.#conversation;
+    const abort = () => controller.abort(request.signal?.reason);
+    request.signal?.addEventListener('abort', abort, { once: true });
+    if (request.signal?.aborted) abort();
+    try {
+      return await this.#runProtectedOperation<ConversationBranchResult>(async () => {
+        await this.prepare();
+        const binding = this.#requireCurrentSessionBinding();
+        if (conversation !== this.#conversation || !isBranchableExecutionSession(binding.session)) {
+          return { status: 'failed', error: 'Conversation branching is unavailable.' };
+        }
+        await this.deps.persistence.assertConversationExecutionAuthority(
+          binding.conversation.conversationId, binding.bindingId, binding.generation,
+        );
+        if (!this.#isBindingCurrent(binding) || controller.signal.aborted) return { status: 'cancelled' };
+        const result = 'userMessageId' in request
+          ? await binding.session.navigateConversationBranch({ ...request, signal: controller.signal })
+          : await binding.session.reconcileConversationBranch({ ...request, signal: controller.signal });
+        if (!this.#isBindingCurrent(binding)) return { status: 'failed', error: 'Conversation changed during branching.' };
+        try {
+          await this.#persistSnapshot(binding, binding.session.getSnapshot(), true);
+          if (result.status !== 'failed') this.#branchRecoveryRequired = result.status === 'recovery-required';
+          return result;
+        } catch (error) {
+          this.#branchRecoveryRequired = true;
+          return { status: 'recovery-required', error: String(error),
+            ...('messages' in result ? { messages: result.messages } : {}) };
+        }
+      });
+    } catch (error) {
+      return { status: 'failed', error: String(error) };
+    } finally {
+      request.signal?.removeEventListener('abort', abort);
+      if (this.#foreground === operation) this.#foreground = null;
+    }
+  }
+
+  async #previewRewindProtected(
+    userMessageId: string,
+    assistantMessageId: string | undefined,
+    mode?: ChatRewindMode,
+  ): Promise<ChatRewindPreview> {
+    await this.prepare();
+    const session = this.#requireCurrentSessionBinding().session;
+    if (!isRewindableExecutionSession(session)) {
+      return { canRewind: false, error: 'Rewind is not supported by this provider.' };
+    }
+    return session.previewRewind(userMessageId, assistantMessageId, mode);
+  }
+
+  async rewind(
+    userMessageId: string,
+    assistantMessageId: string | undefined,
+    mode?: ChatRewindMode,
+  ): Promise<ChatRewindResult> {
+    return this.#runProtectedOperation(() => this.#rewindProtected(
+      userMessageId,
+      assistantMessageId,
+      mode,
+    ));
+  }
+
+  async #rewindProtected(
+    userMessageId: string,
+    assistantMessageId: string | undefined,
+    mode?: ChatRewindMode,
+  ): Promise<ChatRewindResult> {
+    await this.prepare();
+    const binding = this.#requireCurrentSessionBinding();
+    if (!isRewindableExecutionSession(binding.session)) {
+      return { canRewind: false, error: 'Rewind is not supported by this provider.' };
+    }
+    const result = await binding.session.rewind(
+      userMessageId,
+      assistantMessageId,
+      mode,
+    );
+    if (!result.canRewind) return result;
+    if (!this.#isBindingCurrent(binding)) return result;
+    if (result.sessionStrategy === 'checkpoint-resume') {
+      await this.#releaseSessionBinding();
+    } else {
+      await this.#persistSnapshot(binding, binding.session.getSnapshot());
+    }
+    return result;
+  }
+
+  async resolveForkSource(
+    assistantCheckpointId: string,
+    resolveFallbackSessionId: () => Promise<string | null>,
+  ): Promise<ForkSource | null> {
+    const currentSessionId = this.#sessionBinding
+      && this.#isBindingCurrent(this.#sessionBinding)
+      ? this.#sessionBinding.session.getSnapshot().providerSessionId
+      : undefined;
+    const sessionId = currentSessionId ?? await resolveFallbackSessionId();
+    return sessionId
+      ? { sessionId, resumeAt: assistantCheckpointId }
+      : null;
+  }
+
+  dispose(): Promise<void> {
+    if (this.#disposePromise) return this.#disposePromise;
+    this.#disposed = true;
+    this.#invalidateActiveExecution('invalidated', 'session-disposed');
+    this.#pendingSteerAttempts.clear();
+    this.#disposePromise = this.#preparationTail
+      .catch(() => undefined)
+      .then(() => this.#releaseSessionBinding())
+      .then(() => this.#bindingReleases);
+    return this.#disposePromise;
+  }
+
+  #isIdle(): boolean {
+    const binding = this.#sessionBinding;
+    return Boolean(
+      binding
+      && !this.#disposed
+      && !this.#branchRecoveryRequired
+      && this.#protectedOperationCount === 0
+      && this.#activeExecution === null
+      && !this.#interactions.hasPending
+      && !binding.session.hasBackgroundWork?.()
+      && !binding.session.blocksIdleRelease?.()
+      && !binding.events.hasBackgroundWork
+      && binding.pendingWorkCount === 0
+      && (this.deps.isOwnerIdle?.() ?? true),
+    );
+  }
+
+  #restartIdleTimer(): void {
+    this.#clearIdleTimer();
+    const idleReleaseMs = this.deps.idleReleaseMs;
+    if (idleReleaseMs === undefined || this.#disposed || !this.#sessionBinding) return;
+    const generation = this.#idleTimerGeneration;
+    this.#idleTimer = window.setTimeout(() => {
+      this.#idleTimer = null;
+      this.#fireAndReport(this.#enqueuePreparation(() => this.#releaseIdleSession(generation)));
+    }, idleReleaseMs);
+  }
+
+  #clearIdleTimer(): void {
+    this.#idleTimerGeneration += 1;
+    if (this.#idleTimer === null) return;
+    window.clearTimeout(this.#idleTimer);
+    this.#idleTimer = null;
+  }
+
+  /**
+   * Native history changed outside Claudian, so the provider process's context predates it. Releases it
+   * now when idle; otherwise (a native task still runs in it) it stays bound for that work, and the next
+   * send replaces it once it can be released, or is refused while it cannot.
+   */
+  releaseForChangedHistory(): Promise<void> {
+    return this.#enqueuePreparation(async () => {
+      const binding = this.#sessionBinding;
+      if (!binding) return;
+      binding.nativeHistoryChanged = true;
+      await this.#releaseIdleBinding();
+    });
+  }
+
+  /**
+   * A session kept for a native task when its history changed is replaced before the next turn, resuming
+   * from the stored binding: the conversation may have gained its native session after this one bound.
+   */
+  async #replaceChangedHistorySession(): Promise<void> {
+    const stale = this.#sessionBinding;
+    if (!stale?.nativeHistoryChanged || !this.#isBindingCurrent(stale)) return;
+    if (stale.session.blocksIdleRelease?.() || this.hasBackgroundWork) {
+      const reason = t('chat.changedOutsideWithBackgroundTask');
+      throw new ChatExecutionPreHandoffError(reason, reason);
+    }
+    await this.#enqueuePreparation(async () => {
+      if (this.#sessionBinding !== stale) return;
+      await this.#persistSnapshot(stale, stale.session.getSnapshot());
+      if (this.#sessionBinding === stale) await this.#releaseSessionBinding();
+    });
+    const bound = this.#conversation;
+    if (!bound || !this.deps.loadConversationBinding) return;
+    const stored = await this.deps.loadConversationBinding(bound.conversationId);
+    if (stored && this.#conversation === bound && !this.#sessionBinding && stored.providerId === bound.providerId) {
+      this.#conversation = stored;
+    }
+  }
+
+  async #releaseIdleBinding(isCurrent: () => boolean = () => true): Promise<void> {
+    const binding = this.#sessionBinding;
+    if (!binding || !isCurrent() || !this.#isIdle()) return;
+    await this.#persistSnapshot(binding, binding.session.getSnapshot());
+    if (this.#sessionBinding !== binding || !isCurrent() || !this.#isIdle()) return;
+    await this.#releaseSessionBinding();
+    this.deps.onIdleRelease?.();
+  }
+
+  async #releaseIdleSession(generation: number): Promise<void> {
+    const binding = this.#sessionBinding;
+    if (!binding || generation !== this.#idleTimerGeneration) return;
+    try {
+      await this.#releaseIdleBinding(() => generation === this.#idleTimerGeneration);
+    } finally {
+      // Retry busy or failed releases without replacing a newer activity timer.
+      if (this.#sessionBinding === binding && generation === this.#idleTimerGeneration) {
+        this.#restartIdleTimer();
+      }
+    }
+  }
+
+  async #consumeRequestedEvents(
+    active: ActiveExecution,
+  ): Promise<ChatExecutionResult> {
+    let identity = INITIAL_REQUESTED_TURN_IDENTITY;
+    const sinkFailure: { value?: { error: unknown } } = {};
+
+    const terminal = await consumeExecutionEvents(
+      active.run, active.binding.session.sessionInstanceId, active.submission.configuration.model,
+      () => this.#isActiveExecutionCurrent(active),
+      async event => {
+        const next = reduceRequestedTurnIdentity(identity, event);
+        if (next !== identity) {
+          identity = next;
+          if (event.type === 'turn_started') {
+            attachAcceptedSubmission(active.submission, identity.nativeUserMessageId);
+          }
+          attachRequestedTurnIdentity(active.submission.messages, identity);
+        }
+        if (event.type === 'turn_started' && event.accepted) {
+          await this.deps.persistence.recordConversationActivity(
+            active.binding.conversation.conversationId, active.submission.timestamp,
+          );
+        } else if (event.type === 'session_state_changed' || event.type === 'permission_mode_changed') {
+          await this.#persistSnapshot(active.binding, event.snapshot);
+        }
+
+        try {
+          await this.deps.onRequestedEvent?.(
+            event,
+            this.#createEventContext(active.binding, active.submission.submissionId),
+          );
+        } catch (error) {
+          if (!isExecutionTerminalEvent(event)) throw error;
+          sinkFailure.value = { error };
+        }
+      },
+    );
+
+    const { accepted, nativeUserMessageId, nativeAssistantMessageId, nativeCheckpointId } = identity;
+    const rejection = definitePreHandoffRejection(terminal, accepted);
+    if (rejection) {
+      throw sinkFailure.value
+        ? new ChatExecutionPreHandoffError(sinkFailure.value.error)
+        : new ChatExecutionPreHandoffError(rejection, rejection.message);
+    }
+    if (sinkFailure.value) {
+      throw sinkFailure.value.error;
+    }
+
+    if (active.terminationOverride
+      && !(active.terminationOverride === 'cancelled' && terminal?.type === 'turn_completed')) {
+      return createInterruptedResult(active.terminationOverride, accepted);
+    }
+    if (!this.#isBindingCurrent(active.binding)) {
+      return createInterruptedResult('invalidated', accepted);
+    }
+    if (!terminal) {
+      return createInterruptedResult('cancelled', accepted);
+    }
+    if (terminal.type === 'turn_completed') {
+      return {
+        status: 'completed',
+        accepted,
+        nativeUserMessageId,
+        nativeAssistantMessageId,
+        nativeCheckpointId,
+      };
+    }
+    if (terminal.type === 'cancelled') {
+      return {
+        status: 'cancelled',
+        accepted,
+        nativeUserMessageId,
+        nativeAssistantMessageId,
+      };
+    }
+    return {
+      status: 'error',
+      accepted,
+      nativeUserMessageId,
+      nativeAssistantMessageId,
+      error: presentExecutionError(terminal),
+    };
+  }
+
+  #handleSessionEvent(event: ProviderSessionEvent): void {
+    const binding = this.#sessionBinding;
+    if (!binding || !this.#isBindingCurrent(binding)) return;
+    const admitted = binding.events.accept(event, binding.model);
+    if (!admitted) return;
+    this.#publishBackgroundWork();
+    const eventWork: Promise<unknown>[] = [];
+    if (event.type === 'session_state_changed' || event.type === 'permission_mode_changed') {
+      eventWork.push(this.#persistSnapshot(binding, event.snapshot));
+    }
+    try {
+      eventWork.push(Promise.resolve(
+        this.deps.onSessionEvent?.(
+          admitted,
+          this.#createEventContext(binding),
+        ),
+      ));
+    } catch (error) {
+      eventWork.push(Promise.reject(toError(error, 'Session event handler failed')));
+    }
+    this.#trackBindingWork(binding, Promise.all(eventWork));
+    if (event.type === 'background_turn_completed') {
+      this.#restartIdleTimer();
+    }
+  }
+
+  async #persistSnapshot(
+    binding: SessionBinding,
+    snapshot: ProviderSessionSnapshot,
+    requirePersistence = false,
+  ): Promise<void> {
+    if (!this.#isBindingCurrent(binding)) return;
+    await this.#writeSnapshot(binding, snapshot, requirePersistence);
+  }
+
+  /** Writes a newer snapshot under the binding's claim; callers establish that the claim is still held. */
+  async #writeSnapshot(
+    binding: SessionBinding,
+    snapshot: ProviderSessionSnapshot,
+    requirePersistence = false,
+  ): Promise<void> {
+    if (
+      snapshot.providerId !== binding.conversation.providerId
+      || snapshot.revision <= binding.lastSnapshotRevision
+    ) {
+      return;
+    }
+    const persisted = await this.deps.persistence.persistExecutionSnapshot(
+      binding.conversation.conversationId,
+      binding.bindingId,
+      binding.generation,
+      snapshot,
+    );
+    if (!persisted && requirePersistence) throw new Error('Branch snapshot was not persisted.');
+    if (persisted) {
+      binding.lastSnapshotRevision = Math.max(binding.lastSnapshotRevision, snapshot.revision);
+    }
+  }
+
+  #trackBindingWork(
+    binding: SessionBinding,
+    work: Promise<unknown>,
+  ): void {
+    binding.pendingWorkCount += 1;
+    void work
+      .catch((error) => this.deps.onError?.(error))
+      .finally(() => {
+        binding.pendingWorkCount = Math.max(0, binding.pendingWorkCount - 1);
+        if (this.#sessionBinding === binding && binding.pendingWorkCount === 0) {
+          this.#restartIdleTimer();
+        }
+      });
+  }
+
+  #handleLeaseInvalidation(
+    _reason: ProviderExecutionInvalidationReason,
+    released: Promise<void>,
+  ): void {
+    const binding = this.#sessionBinding;
+    if (!binding) return;
+    this.#sessionBinding = null;
+    binding.sessionTools?.dispose();
+    this.#publishBackgroundWork();
+    this.#stale = true;
+    this.#pendingSteerAttempts.clear();
+    this.#invalidateActiveExecution('invalidated', 'provider-transition');
+    const settle = this.#holdReleasedBinding(binding);
+    void this.#trackBindingRelease(settle(released)).catch(error => this.deps.onError?.(error));
+    this.#clearIdleTimer();
+  }
+
+  async #releaseSessionBinding(): Promise<void> {
+    const binding = this.#sessionBinding;
+    this.#sessionBinding = null;
+    binding?.sessionTools?.dispose();
+    this.#pendingSteerAttempts.clear();
+    this.#clearIdleTimer();
+    this.#publishBackgroundWork();
+    const settle = binding ? this.#holdReleasedBinding(binding) : null;
+    const release = this.#supervisor.release();
+    await (settle ? this.#trackBindingRelease(settle(release)) : release);
+  }
+
+  /**
+   * Release can settle provider state after event routing ends (Pi follows a stopped turn's native leaf once
+   * its process exits). Listening from before the release starts, the returned step persists that state while
+   * the claim is still held, then gives the claim up once the native session has finished disposal. The final
+   * disposed announcement only reports teardown, and may carry state the release's caller already reset.
+   */
+  #trackBindingRelease(release: Promise<void>): Promise<void> {
+    const settled = release.catch(() => undefined);
+    this.#bindingReleases = Promise.all([this.#bindingReleases, settled]).then(() => undefined);
+    return release;
+  }
+
+  #holdReleasedBinding(binding: SessionBinding): (release: Promise<void>) => Promise<void> {
+    let settled: ProviderSessionSnapshot | undefined;
+    const stopListening = binding.session.onEvent((event) => {
+      if (event.type === 'session_state_changed' && event.snapshot.status !== 'disposed') {
+        settled = event.snapshot;
+      }
+    });
+    return async (release) => {
+      try {
+        await release;
+        if (settled) await this.#writeSnapshot(binding, settled).catch(error => this.deps.onError?.(error));
+      } finally {
+        stopListening();
+        this.deps.persistence.releaseExecutionBinding(
+          binding.conversation.conversationId,
+          binding.bindingId,
+        );
+      }
+    };
+  }
+
+  async #runProtectedOperation<T>(operation: () => Promise<T>): Promise<T> {
+    this.#protectedOperationCount += 1;
+    try {
+      return await operation();
+    } finally {
+      this.#protectedOperationCount -= 1;
+      if (this.#protectedOperationCount === 0) {
+        this.#restartIdleTimer();
+      }
+    }
+  }
+
+  #invalidateActiveExecution(
+    status: 'cancelled' | 'invalidated',
+    dismissReason: ProviderInteractionDismissReason,
+  ): void {
+    const active = this.#activeExecution;
+    if (active) {
+      active.terminationOverride = status;
+      active.requestController.abort();
+      active.run.cancel();
+    }
+    this.#interactions.dismissAll(dismissReason);
+  }
+
+  #isActiveExecutionCurrent(active: ActiveExecution): boolean {
+    return (
+      this.#activeExecution === active
+      && this.#isBindingCurrent(active.binding)
+    );
+  }
+
+  #isBindingCurrent(binding: SessionBinding): boolean {
+    return (
+      !this.#disposed
+      && this.#sessionBinding === binding
+      && sameConversationBinding(binding.conversation, this.#conversation)
+      && this.#supervisor.isCurrent(binding.session, binding.generation)
+    );
+  }
+
+  #acceptPendingSteerAttempt(
+    attempt: PendingSteerAttempt,
+    nativeUserMessageId?: string,
+  ): Promise<void> {
+    attachAcceptedSubmission(attempt.submission, nativeUserMessageId);
+    attempt.acceptancePromise ??= this.deps.persistence.recordConversationActivity(
+      attempt.conversationId, attempt.submission.timestamp,
+    );
+    return attempt.acceptancePromise;
+  }
+
+  #requireCurrentSessionBinding(): SessionBinding {
+    const binding = this.#sessionBinding;
+    if (!binding || !this.#isBindingCurrent(binding)) {
+      throw new Error('No current chat execution session');
+    }
+    return binding;
+  }
+
+  #requireConversation(): ChatExecutionConversationBinding {
+    if (!this.#conversation) {
+      throw new Error('No conversation is bound for chat execution');
+    }
+    return this.#conversation;
+  }
+
+  #assertAvailable(): void {
+    if (this.#disposed) {
+      throw new Error('Chat execution coordinator is disposed');
+    }
+  }
+
+  #createEventContext(
+    binding: SessionBinding,
+    submissionId?: string,
+  ): ChatExecutionEventContext {
+    return {
+      conversationId: binding.conversation.conversationId,
+      bindingId: binding.bindingId,
+      providerGeneration: binding.generation,
+      session: binding.session,
+      submissionId,
+    };
+  }
+
+  #isInteractionCurrent(request: {
+    sessionInstanceId: string;
+    turnId: string;
+  }): boolean {
+    const binding = this.#sessionBinding;
+    if (
+      !binding
+      || !this.#isBindingCurrent(binding)
+      || request.sessionInstanceId !== binding.session.sessionInstanceId
+    ) {
+      return false;
+    }
+    if (this.#activeExecution?.run.turnId === request.turnId) return true;
+    return binding.events.hasBackgroundTurn(request.turnId);
+  }
+
+  #fireAndReport(promise: Promise<unknown>): void {
+    void promise.catch((error) => this.deps.onError?.(error));
+  }
+}
+
+function createExecutionRequest(
+  submission: ChatTurnSubmission,
+  signal: AbortSignal,
+): ProviderExecutionRequest {
+  return {
+    inputId: submission.submissionId,
+    input: [
+      ...(submission.canonicalText
+        ? [{ type: 'text' as const, text: submission.canonicalText }]
+        : []),
+      ...submission.images.map((image) => ({
+        type: 'image' as const,
+        image,
+      })),
+    ],
+    context: submission.context,
+    conversationHistory: submission.conversationHistory,
+    configuration: submission.configuration,
+    toolPolicy: submission.toolPolicy,
+    signal,
+  };
+}
+
+function sameConversationBinding(
+  left: ChatExecutionConversationBinding | null,
+  right: ChatExecutionConversationBinding | null,
+): boolean {
+  if (left === right) return true;
+  if (!left || !right) return false;
+  return (
+    left.conversationId === right.conversationId
+    && left.providerId === right.providerId
+    && JSON.stringify(left.resumeSeed) === JSON.stringify(right.resumeSeed)
+  );
+}
+
+function createInterruptedResult(
+  status: 'cancelled' | 'invalidated',
+  accepted: boolean,
+): ChatExecutionResult {
+  return {
+    status,
+    accepted,
+  };
+}
+
+function definitePreHandoffRejection(
+  terminal: Extract<
+    ProviderExecutionEvent,
+    { type: 'turn_completed' | 'cancelled' | 'execution_error' }
+  > | undefined,
+  accepted: boolean,
+): Extract<ProviderExecutionEvent, { type: 'execution_error' }> | null {
+  return !accepted && terminal?.type === 'execution_error' && terminal.category === 'configuration'
+    ? terminal
+    : null;
+}

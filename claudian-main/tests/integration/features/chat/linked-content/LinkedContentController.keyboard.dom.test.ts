@@ -1,0 +1,201 @@
+/** @vitest-environment jsdom */
+
+import { axe } from '@test/helpers/accessibility';
+import { testDate } from '@test/helpers/testClock';
+import { fireEvent, within } from '@testing-library/dom';
+import { setIcon, TFolder } from 'obsidian';
+
+import { ComposerInfoRow } from '@/features/chat/composer/ComposerInfoRow';
+import { LinkedContentController } from '@/features/chat/linked-content/LinkedContentController';
+import { ProjectChip } from '@/features/chat/projects/ProjectChip';
+import { createWelcomeElement } from '@/features/chat/rendering/WelcomeRenderer';
+import { setLocale } from '@/i18n/i18n';
+
+beforeAll(() => {
+
+});
+
+it('navigates linked-content choices with arrows, selects, and returns focus on Escape', async () => {
+  const folders = ['Plans', 'Projects'].map(path => Object.assign(new TFolder(), { name: path, path }));
+  const controller = new LinkedContentController({
+    app: {
+      vault: { getAbstractFileByPath: (path: string) => folders.find(folder => folder.path === path) ?? null },
+      workspace: { getActiveFile: () => null },
+    } as never,
+    getExcludedTags: () => [],
+    getCachedVaultFiles: () => [],
+    getCachedVaultFolders: () => folders,
+  });
+  const container = document.body.createDiv();
+  const welcome = createWelcomeElement(container, 'Hello');
+  const view = within(welcome);
+
+  try {
+    controller.mountWelcome(welcome);
+    const selector = view.getByRole('button', { name: 'None' });
+    fireEvent.click(selector);
+    const search = view.getByRole('combobox', { name: 'Linked content:' });
+    expect(search.getAttribute('role')).toBe('combobox');
+    expect(search.getAttribute('aria-expanded')).toBe('false');
+    expect(document.activeElement).toBe(search);
+    fireEvent.input(search, { target: { value: 'p' } });
+    expect(search.getAttribute('aria-expanded')).toBe('true');
+
+    const list = view.getByRole('listbox', { name: 'Linked content choices' });
+    expect(search.getAttribute('aria-controls')).toBe(list.id);
+    const activeChoice = () => document.getElementById(search.getAttribute('aria-activedescendant') ?? '');
+    expect(activeChoice()).toBe(view.getByRole('option', { name: 'Plans. Plans' }));
+    expect(view.getAllByRole('option')).toHaveLength(2);
+    expect(view.getByRole('option', { name: 'Plans. Plans' }).getAttribute('aria-selected')).toBe('true');
+    expect(view.getByRole('option', { name: 'Projects. Projects' }).getAttribute('aria-selected')).toBe('false');
+    expect(await axe(welcome, {
+      runOnly: ['label', 'aria-valid-attr-value', 'aria-roles', 'aria-required-parent', 'aria-required-children'],
+    })).toHaveNoViolations();
+
+    fireEvent.keyDown(search, { key: 'ArrowDown' });
+    expect(activeChoice()).toBe(view.getByRole('option', { name: 'Projects. Projects' }));
+    expect(document.activeElement).toBe(search);
+    expect(view.getByRole('option', { name: 'Projects. Projects' }).getAttribute('aria-selected')).toBe('true');
+    expect(view.getByRole('option', { name: 'Plans. Plans' }).getAttribute('aria-selected')).toBe('false');
+    fireEvent.keyDown(search, { key: 'ArrowUp' });
+    expect(activeChoice()).toBe(view.getByRole('option', { name: 'Plans. Plans' }));
+    expect(view.getByRole('option', { name: 'Plans. Plans' }).getAttribute('aria-selected')).toBe('true');
+    fireEvent.input(search, { target: { value: 'No matching content' } });
+    expect(view.getByRole('listbox', { name: 'Linked content choices' })).toBeTruthy();
+    expect(activeChoice()).toBeNull();
+    fireEvent.input(search, { target: { value: '' } });
+    expect(search.getAttribute('aria-expanded')).toBe('false');
+    expect(search.hasAttribute('aria-controls')).toBe(false);
+    expect(search.hasAttribute('aria-activedescendant')).toBe(false);
+    fireEvent.input(search, { target: { value: 'p' } });
+    expect(activeChoice()).toBe(view.getByRole('option', { name: 'Plans. Plans' }));
+    fireEvent.keyDown(search, { key: 'ArrowDown' });
+    fireEvent.keyDown(search, { key: 'Enter' });
+
+    expect(controller.getSnapshot()).toEqual({ mode: 'explicit-draft', path: 'Projects' });
+    expect(view.queryByRole('combobox', { name: 'Linked content:' })).toBeNull();
+    expect(view.queryByRole('listbox')).toBeNull();
+    expect(selector.getAttribute('aria-expanded')).toBe('false');
+    expect(document.activeElement).toBe(selector);
+
+    fireEvent.click(view.getByRole('button', { name: 'Projects' }));
+    fireEvent.keyDown(view.getByRole('combobox', { name: 'Linked content:' }), { key: 'Escape' });
+    expect(view.queryByRole('combobox', { name: 'Linked content:' })).toBeNull();
+    expect(selector.getAttribute('aria-expanded')).toBe('false');
+    expect(document.activeElement).toBe(selector);
+
+    fireEvent.click(selector);
+    expect(view.getByRole('combobox', { name: 'Linked content:' })).toBeTruthy();
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    expect(view.queryByRole('combobox', { name: 'Linked content:' })).toBeNull();
+    expect(selector.getAttribute('aria-expanded')).toBe('false');
+    expect(document.activeElement).toBe(selector);
+  } finally {
+    controller.destroy();
+    container.remove();
+  }
+});
+
+
+it('localizes the controller-generated missing-content selector label', () => {
+  setLocale('zh-CN');
+  const controller = new LinkedContentController({
+    app: { vault: { getAbstractFileByPath: () => null }, workspace: { getActiveFile: () => null } } as never,
+    getExcludedTags: () => [], getCachedVaultFiles: () => [], getCachedVaultFolders: () => [],
+  });
+  const container = document.body.createDiv();
+  try {
+    const welcome = createWelcomeElement(container, 'Hello');
+    controller.mountWelcome(welcome);
+    controller.selectExplicit('Missing/Plan.md');
+    expect(within(welcome).getByRole('button', { name: 'Plan.md · 内容缺失' })).toBeDefined();
+  } finally {
+    controller.destroy();
+    container.remove();
+    setLocale('en');
+  }
+});
+
+it.each(['Enter', 'Escape', 'ArrowDown', 'ArrowUp'])('leaves %s to an active IME composition in the linked-content search', async key => {
+  const folders = ['Plans', 'Projects'].map(path => Object.assign(new TFolder(), { name: path, path }));
+  const controller = new LinkedContentController({
+    app: {
+      vault: { getAbstractFileByPath: (path: string) => folders.find(folder => folder.path === path) ?? null },
+      workspace: { getActiveFile: () => null },
+    } as never,
+    getExcludedTags: () => [], getCachedVaultFiles: () => [], getCachedVaultFolders: () => folders,
+  });
+  const container = document.body.createDiv();
+  try {
+    const welcome = createWelcomeElement(container, 'Hello');
+    controller.mountWelcome(welcome);
+    const view = within(welcome);
+    fireEvent.click(view.getByRole('button', { name: 'None' }));
+    const search = view.getByRole('combobox', { name: 'Linked content:' });
+    fireEvent.input(search, { target: { value: 'p' } });
+    fireEvent.keyDown(search, { key: 'ArrowDown' });
+    expect(view.getByRole('option', { name: 'Projects. Projects' }).getAttribute('aria-selected')).toBe('true');
+    expect(fireEvent.keyDown(search, { key, isComposing: true })).toBe(true);
+    expect(view.getByRole('combobox', { name: 'Linked content:' })).toBe(search);
+    expect(view.getByRole('option', { name: 'Projects. Projects' }).getAttribute('aria-selected')).toBe('true');
+    expect(controller.getSnapshot()).toEqual({ mode: 'auto-draft', path: null });
+    expect(document.activeElement).toBe(search);
+    expect(await axe(welcome, {
+      runOnly: ['label', 'aria-valid-attr-value', 'aria-roles', 'aria-required-parent', 'aria-required-children'],
+    })).toHaveNoViolations();
+    fireEvent.keyDown(search, { key: 'Enter' });
+    expect(controller.getSnapshot()).toEqual({ mode: 'explicit-draft', path: 'Projects' });
+  } finally { controller.destroy(); container.remove(); }
+});
+
+
+it.each(['main', 'remove'] as const)('keeps the linked-content %s button focused after the linked folder is renamed', async control => {
+  const folder = Object.assign(new TFolder(), { name: 'Plans', path: 'Plans' });
+  const controller = new LinkedContentController({
+    app: { vault: { getAbstractFileByPath: (path: string) => path === folder.path ? folder : null },
+      workspace: { getActiveFile: () => null } } as never,
+    getExcludedTags: () => [], getCachedVaultFiles: () => [], getCachedVaultFolders: () => [folder],
+  });
+  const container = document.body.createDiv();
+  const row = new ComposerInfoRow(container);
+  const outside = document.body.createEl('button', { text: 'Outside', attr: { type: 'button' } });
+  try {
+    controller.selectExplicit('Plans');
+    controller.mountInfoRow(row);
+    const buttonName = (name: string) => control === 'main' ? `Linked content: ${name}` : `Remove Linked content: ${name}`;
+    within(container).getByRole('button', { name: buttonName('Plans') }).focus();
+    Object.assign(folder, { name: 'Roadmap', path: 'Roadmap' });
+    controller.handleRenamed('Plans', 'Roadmap');
+    expect(document.activeElement).toBe(within(container).getByRole('button', { name: buttonName('Roadmap') }));
+    expect(controller.getSnapshot().path).toBe('Roadmap');
+    expect(await axe(container)).toHaveNoViolations();
+    outside.focus();
+    controller.handleCreated('Roadmap');
+    expect(document.activeElement).toBe(outside);
+  } finally { controller.destroy(); row.destroy(); container.remove(); outside.remove(); }
+});
+
+it('keeps a draft project chip focused, with its project icon, after its project record is refreshed', async () => {
+  const container = document.body.createDiv();
+  const row = new ComposerInfoRow(container);
+  let name = 'Launch';
+  let icon: string | undefined;
+  const project = () => ({ id: 'project', name, ...(icon ? { icon } : {}), instructions: '', memoryPath: 'Memory.md', createdAt: testDate().getTime(), isPinned: false, isArchived: false });
+  const chipIcon = () => vi.mocked(setIcon).mock.calls
+    .filter(([element]) => within(container).getByRole('button', { name: `Project: ${name}` }).contains(element)).at(-1)?.[1];
+  const chip = new ProjectChip(row, {
+    projects: { get: project, list: () => [project()] },
+    conversation: { project: { projectId: 'project', isDraft: true, changeable: true }, selectProject: async () => {} },
+  });
+  try {
+    chip.refresh();
+    expect(chipIcon()).toBe('lucide-folder');
+    within(container).getByRole('button', { name: 'Project: Launch' }).focus();
+    name = 'Launch revised';
+    icon = 'lucide-rocket';
+    chip.refresh();
+    expect(document.activeElement).toBe(within(container).getByRole('button', { name: 'Project: Launch revised' }));
+    expect(chipIcon()).toBe('lucide-rocket');
+    expect(await axe(container)).toHaveNoViolations();
+  } finally { chip.destroy(); row.destroy(); container.remove(); }
+});

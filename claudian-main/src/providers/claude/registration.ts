@@ -1,0 +1,79 @@
+import { getProviderConfig, setProviderConfig } from '../../core/providers/providerConfig';
+import { getRuntimeEnvironmentText } from '../../core/providers/providerEnvironment';
+import { hasStoredConfigNormalization } from '../../core/providers/settings/storedSettings';
+import type { ProviderModule } from '../../core/providers/types';
+import { claudeWorkspaceRegistration, getClaudeWorkspaceServices } from './app/ClaudeWorkspaceServices';
+import { CLAUDE_PROVIDER_CAPABILITIES } from './capabilities';
+import { claudeModelPolicy } from './ClaudeModelPolicy';
+import { claudeSettingsReconciler } from './env/ClaudeSettingsReconciler';
+import { ClaudeExecutionBackend } from './execution/ClaudeExecutionBackend';
+import { ClaudeConversationHistoryService } from './history/ClaudeConversationHistoryService';
+import { ClaudeSubagentHistoryService } from './history/ClaudeSubagentHistoryService';
+import { resolveLegacyClaudeVisibleModelIds } from './legacyVisibleModels';
+import {
+  getClaudeModelCatalog,
+  getClaudeVisibleModelIds,
+  hasClaudeModelIdentity,
+  resolveClaudeVisibleModels,
+} from './modelOptions';
+import { projectClaudeModelConfig } from './modelPersistence';
+import { ClaudeTaskResultInterpreter } from './runtime/ClaudeTaskResultInterpreter';
+import { resolveClaudeExecutionWorkingDirectory } from './runtime/probeClaudeRuntime';
+import { getClaudeModelSource, getClaudeProviderSettings, updateClaudeProviderSettings } from './settings';
+import { claudeSubagentAdapter } from './subagentAdapter';
+import { claudeChatUIConfig } from './ui/ClaudeChatUIConfig';
+
+// `responseStyle` migrates to `outputStyle` when settings are read.
+const RETIRED_CLAUDE_CONFIG_KEYS = ['defaultModel', 'effortMetadataMigrated', 'responseStyle'];
+
+export const claudeProviderRegistration: ProviderModule = {
+  id: 'claude',
+  displayName: 'Claude Code',
+  blankTabOrder: 20,
+  isEnabled: settings => getClaudeProviderSettings(settings).enabled,
+  setEnabled: (settings, enabled) => updateClaudeProviderSettings(settings, { enabled }),
+  capabilities: CLAUDE_PROVIDER_CAPABILITIES,
+  environmentKeyPatterns: [/^ANTHROPIC_/i, /^CLAUDE_/i],
+  modelPolicy: claudeModelPolicy,
+  chatUIConfig: claudeChatUIConfig,
+  settingsReconciler: claudeSettingsReconciler,
+  settingsStorage: {
+    projectPersistedConfig: settings => projectClaudeModelConfig(getClaudeModelSource(settings)),
+    needsReasoningMetadata(settings) {
+      const source = getClaudeModelSource(settings);
+      const catalog = getClaudeModelCatalog(source);
+      return resolveClaudeVisibleModels(source, catalog).some(({ id, option }) => !option
+        || !hasClaudeModelIdentity(catalog, id)
+        || (!option.supportedEffortLevels?.length && !option.reasoningMetadataResolved));
+    },
+    hostScopedFields: ['cliPathsByHost', 'installationMethodsByHost', 'wslDistroOverridesByHost'],
+    normalizeStored(target, stored) {
+      const storedConfig = getProviderConfig(stored, 'claude');
+      const storedSettings = getClaudeProviderSettings(stored);
+      updateClaudeProviderSettings(target, {
+        ...storedSettings,
+        // An unset selection is persisted once from the legacy inputs that used to seed it.
+        visibleModels: getClaudeVisibleModelIds({ config: {
+          ...storedConfig,
+          visibleModels: storedSettings.visibleModels
+            ?? resolveLegacyClaudeVisibleModelIds(storedConfig, getRuntimeEnvironmentText(stored, 'claude')),
+        } }),
+      });
+      const targetConfig = getProviderConfig(target, 'claude');
+      for (const key of RETIRED_CLAUDE_CONFIG_KEYS) delete targetConfig[key];
+      setProviderConfig(target, 'claude', targetConfig);
+      return RETIRED_CLAUDE_CONFIG_KEYS.some(key => key in storedConfig)
+        || hasStoredConfigNormalization(storedConfig, targetConfig);
+    },
+  },
+  resolveExecutionWorkingDirectory: (plugin, workingDirectory) => resolveClaudeExecutionWorkingDirectory(plugin.getRuntimeHost('claude'), workingDirectory),
+  createExecutionBackend: plugin => new ClaudeExecutionBackend(plugin.getRuntimeHost('claude'), {
+    publishSessionCatalog: catalog => getClaudeWorkspaceServices()?.publishSessionCatalog(catalog),
+  }),
+  createSubagentHistoryService: plugin => new ClaudeSubagentHistoryService(plugin.getRuntimeHost('claude')),
+
+  historyService: new ClaudeConversationHistoryService(),
+  taskResultInterpreter: new ClaudeTaskResultInterpreter(),
+  subagentAdapter: claudeSubagentAdapter,
+  workspace: claudeWorkspaceRegistration,
+};
